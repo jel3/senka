@@ -1,3 +1,8 @@
+mod env;
+mod init;
+mod req;
+mod run;
+
 use clap::Subcommand;
 
 #[derive(Subcommand)]
@@ -118,20 +123,43 @@ pub enum LogAction {
 
 pub async fn dispatch(cmd: Command) -> anyhow::Result<()> {
     match cmd {
-        Command::Init => {
-            todo!("senka init")
+        Command::Init => init::run(),
+        Command::Env { action } => match action {
+            EnvAction::List => env::list(),
+            _ => {
+                anyhow::bail!("this env subcommand is not yet implemented (planned for M2)")
+            }
+        },
+        Command::Req { action } => match action {
+            ReqAction::List => req::list(),
+            ReqAction::New { name } => req::new(&name),
+        },
+        Command::Run {
+            request,
+            env,
+            vars,
+            json,
+            show_headers,
+            fail,
+            insecure,
+            no_redact,
+            no_color,
+        } => {
+            run::run(run::RunArgs {
+                request,
+                env,
+                vars,
+                json,
+                show_headers,
+                fail,
+                insecure,
+                no_redact,
+                no_color,
+            })
+            .await
         }
-        Command::Env { action: _ } => {
-            todo!("env commands")
-        }
-        Command::Req { action: _ } => {
-            todo!("req commands")
-        }
-        Command::Run { .. } => {
-            todo!("run command")
-        }
-        Command::Log { action: _ } => {
-            todo!("log commands")
+        Command::Log { .. } => {
+            anyhow::bail!("log commands are not yet implemented (planned for M3)")
         }
     }
 }

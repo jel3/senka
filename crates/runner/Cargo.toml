@@ -7,4 +7,6 @@ edition.workspace = true
 senka-core = { workspace = true }
 reqwest = { workspace = true }
 tokio = { workspace = true }
+futures-util = "0.3"
 thiserror = { workspace = true }
+serde = { workspace = true }
