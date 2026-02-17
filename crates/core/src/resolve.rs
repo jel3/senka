@@ -4,6 +4,72 @@ use crate::env::Environment;
 use crate::request::{AuthConfig, Body, RequestDef};
 use crate::template;
 
+/// Collect all template variable names referenced in a request definition.
+/// Returns a deduplicated list.
+pub fn collect_template_vars(req: &RequestDef) -> Vec<String> {
+    let mut vars = template::extract_vars(&req.url);
+
+    for v in req.headers.values() {
+        vars.extend(template::extract_vars(v));
+    }
+
+    for v in req.query.values() {
+        vars.extend(template::extract_vars(v));
+    }
+
+    if let Some(ref auth) = req.auth {
+        match auth {
+            AuthConfig::Bearer { token } => {
+                vars.extend(template::extract_vars(token));
+            }
+            AuthConfig::Basic { username, password } => {
+                vars.extend(template::extract_vars(username));
+                vars.extend(template::extract_vars(password));
+            }
+        }
+    }
+
+    if let Some(ref body) = req.body {
+        match body {
+            Body::Raw(s) => {
+                vars.extend(template::extract_vars(s));
+            }
+            Body::Json(val) => {
+                collect_json_vars(val, &mut vars);
+            }
+            Body::Form(map) => {
+                for v in map.values() {
+                    vars.extend(template::extract_vars(v));
+                }
+            }
+        }
+    }
+
+    vars.sort();
+    vars.dedup();
+    vars
+}
+
+/// Recursively collect template variable names from JSON values.
+fn collect_json_vars(val: &serde_json::Value, out: &mut Vec<String>) {
+    match val {
+        serde_json::Value::String(s) => {
+            out.extend(template::extract_vars(s));
+        }
+        serde_json::Value::Array(arr) => {
+            for item in arr {
+                collect_json_vars(item, out);
+            }
+        }
+        serde_json::Value::Object(map) => {
+            for v in map.values() {
+                collect_json_vars(v, out);
+            }
+        }
+        _ => {}
+    }
+}
+
 /// Merge variable sources in priority order:
 /// 1. CLI overrides (highest)
 /// 2. Environment file values
@@ -180,6 +246,69 @@ mod tests {
         assert_eq!(req.url, "https://example.com/api");
         assert_eq!(req.headers["Authorization"], "Bearer abc123");
         assert_eq!(req.query["key"], "abc123");
+    }
+
+    #[test]
+    fn collect_template_vars_url_headers_query() {
+        let req = RequestDef {
+            name: "test".into(),
+            method: "GET".into(),
+            url: "https://{{host}}/api".into(),
+            headers: HashMap::from([("Authorization".into(), "Bearer {{token}}".into())]),
+            query: HashMap::from([("key".into(), "{{api_key}}".into())]),
+            auth: None,
+            body: None,
+        };
+        let vars = collect_template_vars(&req);
+        assert_eq!(vars, vec!["api_key", "host", "token"]);
+    }
+
+    #[test]
+    fn collect_template_vars_auth() {
+        let req = RequestDef {
+            name: "test".into(),
+            method: "POST".into(),
+            url: "http://localhost".into(),
+            headers: HashMap::new(),
+            query: HashMap::new(),
+            auth: Some(AuthConfig::Basic {
+                username: "{{user}}".into(),
+                password: "{{pass}}".into(),
+            }),
+            body: None,
+        };
+        let vars = collect_template_vars(&req);
+        assert_eq!(vars, vec!["pass", "user"]);
+    }
+
+    #[test]
+    fn collect_template_vars_body() {
+        let req = RequestDef {
+            name: "test".into(),
+            method: "POST".into(),
+            url: "http://localhost".into(),
+            headers: HashMap::new(),
+            query: HashMap::new(),
+            auth: None,
+            body: Some(Body::Json(serde_json::json!({"user": "{{name}}", "nested": {"key": "{{secret}}"}}))),
+        };
+        let vars = collect_template_vars(&req);
+        assert_eq!(vars, vec!["name", "secret"]);
+    }
+
+    #[test]
+    fn collect_template_vars_deduplicates() {
+        let req = RequestDef {
+            name: "test".into(),
+            method: "GET".into(),
+            url: "https://{{host}}/{{host}}".into(),
+            headers: HashMap::new(),
+            query: HashMap::new(),
+            auth: None,
+            body: None,
+        };
+        let vars = collect_template_vars(&req);
+        assert_eq!(vars, vec!["host"]);
     }
 
     #[test]

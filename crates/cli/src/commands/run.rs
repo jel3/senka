@@ -46,11 +46,34 @@ pub async fn run(args: RunArgs) -> anyhow::Result<()> {
         .map_err(|e| anyhow::anyhow!("{e}"))?;
 
     // Merge variables
-    let vars = resolve::merge_vars(env.as_ref(), &overrides);
+    let mut vars = resolve::merge_vars(env.as_ref(), &overrides);
 
-    // Load and render request
+    // Load request (before rendering, to discover needed vars)
     let mut req = loader::load_request(&root, &args.request)
         .with_context(|| format!("failed to load request '{}'", args.request))?;
+
+    // Resolve secrets for any unresolved template variables
+    let mut secret_values = Vec::new();
+    let needed_vars = resolve::collect_template_vars(&req);
+    if let Some(env_name) = env_name {
+        for var_name in &needed_vars {
+            if vars.contains_key(var_name.as_str()) {
+                continue;
+            }
+            match senka_secrets::get(&config.name, env_name, var_name) {
+                Ok(Some(val)) => {
+                    secret_values.push(val.clone());
+                    vars.insert(var_name.clone(), val);
+                }
+                Ok(None) => {} // not in keychain either; render will report unresolved
+                Err(e) => {
+                    eprintln!("warning: failed to read secret '{var_name}': {e}");
+                }
+            }
+        }
+    }
+
+    // Render request templates
     resolve::render_request(&mut req, &vars)
         .context("failed to resolve template variables in request")?;
 
@@ -77,6 +100,7 @@ pub async fn run(args: RunArgs) -> anyhow::Result<()> {
         show_headers: args.show_headers,
         no_color: args.no_color,
         no_redact: args.no_redact,
+        secret_values,
     };
     output::print_response(&resp, &req.method, &req.url, &config.redaction, &out_opts);
 

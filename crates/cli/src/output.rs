@@ -11,6 +11,7 @@ pub struct OutputOptions {
     pub show_headers: bool,
     pub no_color: bool,
     pub no_redact: bool,
+    pub secret_values: Vec<String>,
 }
 
 /// JSON output envelope.
@@ -32,8 +33,28 @@ pub fn print_response(
     redaction: &RedactionConfig,
     opts: &OutputOptions,
 ) {
-    let headers = redact_headers(&resp.headers, redaction, opts.no_redact);
+    let should_redact = !opts.no_redact;
+    let headers = redact_headers(&resp.headers, redaction, opts.no_redact, &opts.secret_values);
     let body_str = String::from_utf8_lossy(&resp.body);
+
+    // Apply secret value redaction to the body text
+    let body_str = if should_redact && !opts.secret_values.is_empty() {
+        std::borrow::Cow::Owned(redact::redact_secret_values(&body_str, &opts.secret_values))
+    } else {
+        body_str
+    };
+
+    // Apply JSON field redaction if body parses as JSON
+    let body_str = if should_redact && !redaction.json_fields.is_empty() {
+        if let Ok(mut json_val) = serde_json::from_str::<serde_json::Value>(&body_str) {
+            redact::redact_json_fields(&mut json_val, redaction);
+            std::borrow::Cow::Owned(serde_json::to_string_pretty(&json_val).unwrap_or_else(|_| body_str.into_owned()))
+        } else {
+            body_str
+        }
+    } else {
+        body_str
+    };
 
     if opts.json {
         let output = JsonOutput {
@@ -100,12 +121,17 @@ fn redact_headers(
     headers: &HashMap<String, String>,
     config: &RedactionConfig,
     no_redact: bool,
+    secret_values: &[String],
 ) -> HashMap<String, String> {
     if no_redact {
         return headers.clone();
     }
     headers
         .iter()
-        .map(|(k, v)| (k.clone(), redact::redact_header_value(k, v, config)))
+        .map(|(k, v)| {
+            let val = redact::redact_header_value(k, v, config);
+            let val = redact::redact_secret_values(&val, secret_values);
+            (k.clone(), val)
+        })
         .collect()
 }

@@ -12,6 +12,15 @@ pub struct UnresolvedVarsError {
     pub missing: Vec<String>,
 }
 
+/// Extract all `{{var}}` placeholder names from `input`.
+/// Returns a list of variable names (may contain duplicates).
+pub fn extract_vars(input: &str) -> Vec<String> {
+    TEMPLATE_RE
+        .captures_iter(input)
+        .map(|caps| caps[1].to_string())
+        .collect()
+}
+
 /// Render all `{{var}}` placeholders in `input` using the provided `vars` map.
 /// Returns an error listing any unresolved variable names.
 pub fn render(input: &str, vars: &HashMap<String, String>) -> Result<String, UnresolvedVarsError> {
@@ -55,6 +64,24 @@ mod tests {
         let vars = HashMap::new();
         let err = render("{{missing}}", &vars).unwrap_err();
         assert_eq!(err.missing, vec!["missing"]);
+    }
+
+    #[test]
+    fn extract_vars_finds_all_placeholders() {
+        let vars = extract_vars("https://{{host}}/users/{{id}}?token={{token}}");
+        assert_eq!(vars, vec!["host", "id", "token"]);
+    }
+
+    #[test]
+    fn extract_vars_empty_when_none() {
+        let vars = extract_vars("https://example.com/users");
+        assert!(vars.is_empty());
+    }
+
+    #[test]
+    fn extract_vars_with_whitespace() {
+        let vars = extract_vars("{{ host }}");
+        assert_eq!(vars, vec!["host"]);
     }
 
     #[test]

@@ -126,8 +126,9 @@ pub async fn dispatch(cmd: Command) -> anyhow::Result<()> {
         Command::Init => init::run(),
         Command::Env { action } => match action {
             EnvAction::List => env::list(),
+            EnvAction::SetSecret { key, env } => env::set_secret(&key, env.as_deref()),
             _ => {
-                anyhow::bail!("this env subcommand is not yet implemented (planned for M2)")
+                anyhow::bail!("this env subcommand is not yet implemented")
             }
         },
         Command::Req { action } => match action {

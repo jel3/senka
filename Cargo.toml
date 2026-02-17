@@ -45,6 +45,9 @@ ulid = "1"
 # Templating
 regex = "1"
 
+# Password input
+rpassword = "7"
+
 # Error handling
 thiserror = "2"
 anyhow = "1"
