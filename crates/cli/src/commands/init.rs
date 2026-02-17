@@ -39,8 +39,8 @@ url: "{{base_url}}/health"
 pub fn run() -> anyhow::Result<()> {
     let cwd = std::env::current_dir().context("failed to get current directory")?;
 
-    if cwd.join("tool.yml").exists() {
-        bail!("Senka project already initialized (tool.yml exists)");
+    if cwd.join("senka.yml").exists() {
+        bail!("Senka project already initialized (senka.yml exists)");
     }
 
     // Create directories
@@ -49,7 +49,7 @@ pub fn run() -> anyhow::Result<()> {
     fs::create_dir_all(cwd.join(".senka")).context("failed to create .senka/ directory")?;
 
     // Write files
-    write_if_missing(&cwd.join("tool.yml"), TOOL_YML)?;
+    write_if_missing(&cwd.join("senka.yml"), TOOL_YML)?;
     write_if_missing(&cwd.join("env").join("dev.yml"), DEV_ENV_YML)?;
     write_if_missing(
         &cwd.join("requests").join("example.get.yml"),
@@ -58,7 +58,7 @@ pub fn run() -> anyhow::Result<()> {
 
     println!("Initialized Senka project in {}", cwd.display());
     println!();
-    println!("  tool.yml                   Project configuration");
+    println!("  senka.yml                   Project configuration");
     println!("  env/dev.yml                Development environment");
     println!("  requests/example.get.yml   Example request");
     println!();

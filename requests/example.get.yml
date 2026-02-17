@@ -1,0 +1,3 @@
+name: example.get
+method: GET
+url: "{{base_url}}/health"

@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-/// Top-level project configuration loaded from `tool.yml`.
+/// Top-level project configuration loaded from `senka.yml`.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ProjectConfig {
     pub name: String,

@@ -7,7 +7,7 @@ use senka_core::loader;
 pub fn list() -> anyhow::Result<()> {
     let cwd = std::env::current_dir().context("failed to get current directory")?;
     let root = loader::find_project_root(&cwd)
-        .context("not inside a Senka project (no tool.yml found)")?;
+        .context("not inside a Senka project (no senka.yml found)")?;
 
     let requests = loader::list_requests(&root).context("failed to list requests")?;
 
@@ -24,7 +24,7 @@ pub fn list() -> anyhow::Result<()> {
 pub fn new(name: &str) -> anyhow::Result<()> {
     let cwd = std::env::current_dir().context("failed to get current directory")?;
     let root = loader::find_project_root(&cwd)
-        .context("not inside a Senka project (no tool.yml found)")?;
+        .context("not inside a Senka project (no senka.yml found)")?;
 
     let req_dir = root.join("requests");
     fs::create_dir_all(&req_dir).context("failed to create requests/ directory")?;

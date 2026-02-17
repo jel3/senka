@@ -73,8 +73,8 @@ impl App {
     pub fn new() -> anyhow::Result<Self> {
         let cwd = std::env::current_dir().context("failed to get current directory")?;
         let root = loader::find_project_root(&cwd)
-            .context("not inside a Senka project (no tool.yml found)")?;
-        let config = loader::load_config(&root).context("failed to load tool.yml")?;
+            .context("not inside a Senka project (no senka.yml found)")?;
+        let config = loader::load_config(&root).context("failed to load senka.yml")?;
 
         let request_names = loader::list_requests(&root).unwrap_or_default();
         let envs = loader::list_envs(&root).unwrap_or_default();

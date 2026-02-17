@@ -8,7 +8,7 @@ use thiserror::Error;
 
 #[derive(Debug, Error)]
 pub enum LoadError {
-    #[error("no tool.yml found in current or parent directories")]
+    #[error("no senka.yml found in current or parent directories")]
     ProjectNotFound,
 
     #[error("failed to read {path}: {source}")]
@@ -24,11 +24,11 @@ pub enum LoadError {
     },
 }
 
-/// Walk up from `start` looking for `tool.yml`, returning its parent directory.
+/// Walk up from `start` looking for `senka.yml`, returning its parent directory.
 pub fn find_project_root(start: &Path) -> Result<PathBuf, LoadError> {
     let mut dir = start.to_path_buf();
     loop {
-        if dir.join("tool.yml").is_file() {
+        if dir.join("senka.yml").is_file() {
             return Ok(dir);
         }
         if !dir.pop() {
@@ -37,9 +37,9 @@ pub fn find_project_root(start: &Path) -> Result<PathBuf, LoadError> {
     }
 }
 
-/// Read and parse `tool.yml` from the project root.
+/// Read and parse `senka.yml` from the project root.
 pub fn load_config(root: &Path) -> Result<ProjectConfig, LoadError> {
-    let path = root.join("tool.yml");
+    let path = root.join("senka.yml");
     let contents = std::fs::read_to_string(&path).map_err(|e| LoadError::ReadFile {
         path: path.clone(),
         source: e,
@@ -113,7 +113,7 @@ mod tests {
 
     fn setup_project(dir: &Path) {
         fs::write(
-            dir.join("tool.yml"),
+            dir.join("senka.yml"),
             "name: test-project\n",
         )
         .unwrap();
