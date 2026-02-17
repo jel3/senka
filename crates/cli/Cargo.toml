@@ -20,6 +20,7 @@ serde_json = { workspace = true }
 serde_yaml = { workspace = true }
 anyhow = { workspace = true }
 rpassword = { workspace = true }
+ulid = { workspace = true }
 
 [features]
 default = []

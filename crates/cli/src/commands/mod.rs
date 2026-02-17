@@ -1,5 +1,6 @@
 mod env;
 mod init;
+mod log;
 mod req;
 mod run;
 
@@ -65,6 +66,14 @@ pub enum Command {
     Log {
         #[command(subcommand)]
         action: LogAction,
+
+        /// Output as JSON.
+        #[arg(long, global = true)]
+        json: bool,
+
+        /// Disable color output.
+        #[arg(long, global = true)]
+        no_color: bool,
     },
 }
 
@@ -159,8 +168,10 @@ pub async fn dispatch(cmd: Command) -> anyhow::Result<()> {
             })
             .await
         }
-        Command::Log { .. } => {
-            anyhow::bail!("log commands are not yet implemented (planned for M3)")
-        }
+        Command::Log {
+            action,
+            json,
+            no_color,
+        } => log::handle(action, json, no_color),
     }
 }

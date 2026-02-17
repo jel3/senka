@@ -1450,6 +1450,7 @@ dependencies = [
  "serde_json",
  "serde_yaml",
  "tokio",
+ "ulid",
 ]
 
 [[package]]
@@ -1493,6 +1494,7 @@ dependencies = [
  "senka-core",
  "serde",
  "serde_json",
+ "tempfile",
  "thiserror",
  "ulid",
 ]
