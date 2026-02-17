@@ -13,6 +13,9 @@ CLAUDE.md
 .DS_Store
 Thumbs.db
 
+.env
+
 # Senka project data
 .senka/
+.senka-*/
 senka.yml

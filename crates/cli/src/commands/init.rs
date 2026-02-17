@@ -44,23 +44,23 @@ pub fn run() -> anyhow::Result<()> {
     }
 
     // Create directories
-    fs::create_dir_all(cwd.join("env")).context("failed to create env/ directory")?;
-    fs::create_dir_all(cwd.join("requests")).context("failed to create requests/ directory")?;
+    fs::create_dir_all(cwd.join(".senka-env")).context("failed to create .senka-env/ directory")?;
+    fs::create_dir_all(cwd.join(".senka-requests")).context("failed to create .senka-requests/ directory")?;
     fs::create_dir_all(cwd.join(".senka")).context("failed to create .senka/ directory")?;
 
     // Write files
     write_if_missing(&cwd.join("senka.yml"), TOOL_YML)?;
-    write_if_missing(&cwd.join("env").join("dev.yml"), DEV_ENV_YML)?;
+    write_if_missing(&cwd.join(".senka-env").join("dev.yml"), DEV_ENV_YML)?;
     write_if_missing(
-        &cwd.join("requests").join("example.get.yml"),
+        &cwd.join(".senka-requests").join("example.get.yml"),
         EXAMPLE_REQUEST_YML,
     )?;
 
     println!("Initialized Senka project in {}", cwd.display());
     println!();
     println!("  senka.yml                   Project configuration");
-    println!("  env/dev.yml                Development environment");
-    println!("  requests/example.get.yml   Example request");
+    println!("  .senka-env/dev.yml                Development environment");
+    println!("  .senka-requests/example.get.yml   Example request");
     println!();
     println!("Next: senka run example.get --env dev");
 

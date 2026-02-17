@@ -45,7 +45,7 @@ pub async fn run(args: RunArgs) -> anyhow::Result<()> {
     let env = match env_name {
         Some(name) => Some(
             loader::load_env(&root, name)
-                .with_context(|| format!("failed to load env/{name}.yml"))?,
+                .with_context(|| format!("failed to load .senka-env/{name}.yml"))?,
         ),
         None => None,
     };
