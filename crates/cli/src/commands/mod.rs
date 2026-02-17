@@ -62,6 +62,10 @@ pub enum Command {
         no_color: bool,
     },
 
+    /// Launch the interactive TUI.
+    #[cfg(feature = "tui")]
+    Tui,
+
     /// Query and manage logs.
     Log {
         #[command(subcommand)]
@@ -168,6 +172,8 @@ pub async fn dispatch(cmd: Command) -> anyhow::Result<()> {
             })
             .await
         }
+        #[cfg(feature = "tui")]
+        Command::Tui => senka_tui::run().await,
         Command::Log {
             action,
             json,

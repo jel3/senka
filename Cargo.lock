@@ -1508,8 +1508,11 @@ dependencies = [
  "ratatui",
  "senka-core",
  "senka-runner",
+ "senka-secrets",
  "senka-store",
+ "serde_json",
  "tokio",
+ "ulid",
 ]
 
 [[package]]

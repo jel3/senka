@@ -12,7 +12,7 @@ use senka_runner::response::CapturedResponse;
 use senka_store::db;
 use senka_store::models::{Payload, Run};
 
-use crate::commands::log::now_epoch_ms;
+use senka_core::util::now_epoch_ms;
 use crate::output::{self, OutputOptions};
 
 pub struct RunArgs {
