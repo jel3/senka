@@ -1,0 +1,13 @@
+[package]
+name = "senka-tui"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+senka-core = { workspace = true }
+senka-runner = { workspace = true }
+senka-store = { workspace = true }
+ratatui = { workspace = true }
+crossterm = { workspace = true }
+tokio = { workspace = true }
+anyhow = { workspace = true }

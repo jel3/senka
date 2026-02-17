@@ -1,0 +1,10 @@
+[package]
+name = "senka-runner"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+senka-core = { workspace = true }
+reqwest = { workspace = true }
+tokio = { workspace = true }
+thiserror = { workspace = true }

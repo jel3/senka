@@ -1,0 +1,57 @@
+[workspace]
+members = [
+    "crates/core",
+    "crates/runner",
+    "crates/store",
+    "crates/secrets",
+    "crates/cli",
+    "crates/tui",
+]
+resolver = "2"
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+
+[workspace.dependencies]
+# Serialization
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+serde_yaml = "0.9"
+
+# Async
+tokio = { version = "1", features = ["full"] }
+
+# HTTP
+reqwest = { version = "0.12", features = ["json", "stream"] }
+
+# CLI
+clap = { version = "4", features = ["derive"] }
+
+# Database
+rusqlite = { version = "0.31", features = ["bundled"] }
+
+# Secrets
+keyring = "3"
+
+# TUI
+ratatui = "0.29"
+crossterm = "0.28"
+
+# IDs
+ulid = "1"
+
+# Templating
+regex = "1"
+
+# Error handling
+thiserror = "2"
+anyhow = "1"
+
+# Internal crates
+senka-core = { path = "crates/core" }
+senka-runner = { path = "crates/runner" }
+senka-store = { path = "crates/store" }
+senka-secrets = { path = "crates/secrets" }
+senka-tui = { path = "crates/tui" }

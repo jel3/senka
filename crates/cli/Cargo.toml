@@ -1,0 +1,23 @@
+[package]
+name = "senka"
+version.workspace = true
+edition.workspace = true
+
+[[bin]]
+name = "senka"
+path = "src/main.rs"
+
+[dependencies]
+senka-core = { workspace = true }
+senka-runner = { workspace = true }
+senka-store = { workspace = true }
+senka-secrets = { workspace = true }
+senka-tui = { workspace = true, optional = true }
+clap = { workspace = true }
+tokio = { workspace = true }
+serde_json = { workspace = true }
+anyhow = { workspace = true }
+
+[features]
+default = []
+tui = ["dep:senka-tui"]
