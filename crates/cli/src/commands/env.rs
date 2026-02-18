@@ -10,7 +10,7 @@ pub fn list() -> anyhow::Result<()> {
     let envs = loader::list_envs(&root).context("failed to list environments")?;
 
     if envs.is_empty() {
-        println!("No environment files found in .senka-env/");
+        println!("No environment files found in senka-env/");
     } else {
         for name in &envs {
             println!("  {name}");
@@ -32,7 +32,7 @@ pub fn set_secret(key: &str, env: Option<&str>) -> anyhow::Result<()> {
     // Verify env file exists
     let envs = loader::list_envs(&root).context("failed to list environments")?;
     if !envs.iter().any(|e| e == env_name) {
-        bail!("environment '{env_name}' not found (create .senka-env/{env_name}.yml first)");
+        bail!("environment '{env_name}' not found (create senka-env/{env_name}.yml first)");
     }
 
     let value = rpassword::prompt_password(format!("Enter secret value for '{key}': "))

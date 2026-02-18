@@ -47,9 +47,9 @@ pub fn load_config(root: &Path) -> Result<ProjectConfig, LoadError> {
     serde_yaml::from_str(&contents).map_err(|e| LoadError::ParseYaml { path, source: e })
 }
 
-/// Read and parse `.senka-env/{name}.yml`.
+/// Read and parse `senka-env/{name}.yml`.
 pub fn load_env(root: &Path, name: &str) -> Result<Environment, LoadError> {
-    let path = root.join(".senka-env").join(format!("{name}.yml"));
+    let path = root.join("senka-env").join(format!("{name}.yml"));
     let contents = std::fs::read_to_string(&path).map_err(|e| LoadError::ReadFile {
         path: path.clone(),
         source: e,
@@ -57,9 +57,9 @@ pub fn load_env(root: &Path, name: &str) -> Result<Environment, LoadError> {
     serde_yaml::from_str(&contents).map_err(|e| LoadError::ParseYaml { path, source: e })
 }
 
-/// Read and parse `.senka-requests/{name}.yml`.
+/// Read and parse `senka-requests/{name}.yml`.
 pub fn load_request(root: &Path, name: &str) -> Result<RequestDef, LoadError> {
-    let path = root.join(".senka-requests").join(format!("{name}.yml"));
+    let path = root.join("senka-requests").join(format!("{name}.yml"));
     let contents = std::fs::read_to_string(&path).map_err(|e| LoadError::ReadFile {
         path: path.clone(),
         source: e,
@@ -67,14 +67,14 @@ pub fn load_request(root: &Path, name: &str) -> Result<RequestDef, LoadError> {
     serde_yaml::from_str(&contents).map_err(|e| LoadError::ParseYaml { path, source: e })
 }
 
-/// List environment names (filenames in `.senka-env/` without `.yml` extension).
+/// List environment names (filenames in `senka-env/` without `.yml` extension).
 pub fn list_envs(root: &Path) -> Result<Vec<String>, LoadError> {
-    list_yml_stems(&root.join(".senka-env"))
+    list_yml_stems(&root.join("senka-env"))
 }
 
-/// List request names (filenames in `.senka-requests/` without `.yml` extension).
+/// List request names (filenames in `senka-requests/` without `.yml` extension).
 pub fn list_requests(root: &Path) -> Result<Vec<String>, LoadError> {
-    list_yml_stems(&root.join(".senka-requests"))
+    list_yml_stems(&root.join("senka-requests"))
 }
 
 fn list_yml_stems(dir: &Path) -> Result<Vec<String>, LoadError> {
@@ -118,12 +118,12 @@ mod tests {
         )
         .unwrap();
 
-        let env_dir = dir.join(".senka-env");
+        let env_dir = dir.join("senka-env");
         fs::create_dir_all(&env_dir).unwrap();
         fs::write(env_dir.join("dev.yml"), "base_url: http://localhost:3000\n").unwrap();
         fs::write(env_dir.join("staging.yml"), "base_url: http://staging.example.com\n").unwrap();
 
-        let req_dir = dir.join(".senka-requests");
+        let req_dir = dir.join("senka-requests");
         fs::create_dir_all(&req_dir).unwrap();
         fs::write(
             req_dir.join("users.get.yml"),

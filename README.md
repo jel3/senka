@@ -24,7 +24,7 @@ senka init
 # Create a request
 senka req new users.get
 
-# Edit .senka-requests/users.get.yml, then run it
+# Edit senka-requests/users.get.yml, then run it
 senka run users.get --env dev
 
 # Browse requests and logs interactively
@@ -38,9 +38,9 @@ After `senka init`:
 ```
 my-project/
   senka.yml                  # Project config
-  .senka-env/
+  senka-env/
     dev.yml                  # Plaintext env variables
-  .senka-requests/
+  senka-requests/
     example.get.yml          # Request definitions
   .senka/
     logs.db                  # SQLite log database (auto-created)
@@ -75,10 +75,10 @@ logging:
 
 ## Request Files
 
-Request files live in `.senka-requests/` and are named `<name>.yml`.
+Request files live in `senka-requests/` and are named `<name>.yml`.
 
 ```yaml
-# .senka-requests/users.get.yml
+# senka-requests/users.get.yml
 name: users.get
 method: GET
 url: "{{base_url}}/users"
@@ -127,7 +127,7 @@ auth:
 Variables are defined per environment in `senka-env/<name>.yml`:
 
 ```yaml
-# .senka-env/dev.yml
+# senka-env/dev.yml
 base_url: http://localhost:3000
 user: alice
 ```
@@ -137,14 +137,14 @@ Template syntax: `{{var_name}}` — applied to URL, headers, query params, and b
 Variable resolution order (highest wins):
 
 1. `--var` CLI overrides
-2. Environment file (`.senka-env/<name>.yml`)
+2. Environment file (`senka-env/<name>.yml`)
 3. Secret store (OS keychain)
 
 ## Commands
 
 ### `senka init`
 
-Initialize a new project in the current directory. Creates `senka.yml`, `.senka-env/dev.yml`, and an example request.
+Initialize a new project in the current directory. Creates `senka.yml`, `senka-env/dev.yml`, and an example request.
 
 ### `senka run <request> [options]`
 
@@ -176,7 +176,7 @@ List all request files in the project.
 
 ### `senka req new <name>`
 
-Create a new request file at `.senka-requests/<name>.yml` with a starter template.
+Create a new request file at `senka-requests/<name>.yml` with a starter template.
 
 ### `senka env list`
 

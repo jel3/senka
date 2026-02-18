@@ -12,7 +12,7 @@ pub fn list() -> anyhow::Result<()> {
     let requests = loader::list_requests(&root).context("failed to list requests")?;
 
     if requests.is_empty() {
-        println!("No request files found in .senka-requests/");
+        println!("No request files found in senka-requests/");
     } else {
         for name in &requests {
             println!("  {name}");
@@ -26,8 +26,8 @@ pub fn new(name: &str) -> anyhow::Result<()> {
     let root = loader::find_project_root(&cwd)
         .context("not inside a Senka project (no senka.yml found)")?;
 
-    let req_dir = root.join(".senka-requests");
-    fs::create_dir_all(&req_dir).context("failed to create .senka-requests/ directory")?;
+    let req_dir = root.join("senka-requests");
+    fs::create_dir_all(&req_dir).context("failed to create senka-requests/ directory")?;
 
     let file_path = req_dir.join(format!("{name}.yml"));
     if file_path.exists() {
@@ -46,6 +46,6 @@ query: {{}}
     fs::write(&file_path, content)
         .with_context(|| format!("failed to write {}", file_path.display()))?;
 
-    println!("Created .senka-requests/{name}.yml");
+    println!("Created senka-requests/{name}.yml");
     Ok(())
 }

@@ -17,5 +17,5 @@ Thumbs.db
 
 # Senka project data
 .senka/
-.senka-*/
+senka-*/
 senka.yml
