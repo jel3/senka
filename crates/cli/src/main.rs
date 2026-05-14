@@ -8,29 +8,25 @@ use rand::Rng;
 #[command(name = "senka", version, about = "CLI-first HTTP runner")]
 struct Cli {
     #[command(subcommand)]
-    command: commands::Command,
+    command: Option<commands::Command>,
 }
 
 #[tokio::main]
 async fn main() {
     let cli = Cli::parse();
 
-    let show_banner = {
-        #[cfg(feature = "tui")]
-        {
-            matches!(cli.command, commands::Command::Tui)
-        }
-        #[cfg(not(feature = "tui"))]
-        {
-            false
+    let command = match cli.command {
+        Some(cmd) => cmd,
+        None => {
+            print_banner();
+            println!();
+            // Re-invoke clap help
+            let _ = Cli::parse_from(["senka", "--help"]);
+            return;
         }
     };
 
-    if show_banner {
-        print_banner();
-    }
-
-    if let Err(e) = commands::dispatch(cli.command).await {
+    if let Err(e) = commands::dispatch(command).await {
         let exit_code = classify_error(&e);
         eprintln!("error: {e:#}");
         std::process::exit(exit_code);
@@ -39,12 +35,12 @@ async fn main() {
 
 fn print_banner() {
     const LINES: [&str; 6] = [
-        " _   _                _           _     ",
-        "| | | | ___ _   _    | |__  _   _| |__  ",
-        "| |_| |/ _ \\ | | |   | '_ \\| | | | '_ \\ ",
-        "|  _  |  __/ |_| |   | |_) | |_| | |_) |",
-        "|_| |_|\\___\\__, |   |_.__/ \\__,_|_.__/ ",
-        "            |___/                        ",
+        "                 _         ",
+        " ___  ___ _ __ | | ____ _ ",
+        "/ __|/ _ \\ '_ \\| |/ / _` |",
+        "\\__ \\  __/ | | |   < (_| |",
+        "|___/\\___|_| |_|_|\\_\\__,_|",
+        "                           ",
     ];
 
     if std::env::var_os("NO_COLOR").is_some() {

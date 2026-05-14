@@ -13,6 +13,9 @@ pub struct ProjectConfig {
 
     #[serde(default)]
     pub logging: LoggingConfig,
+
+    #[serde(default)]
+    pub tui: TuiConfig,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -77,6 +80,13 @@ impl Default for LoggingConfig {
             retention_days: default_retention_days(),
         }
     }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct TuiConfig {
+    /// Enable keyboard-driven text selection (v/y) in the detail panel.
+    #[serde(default)]
+    pub keyboard_select: bool,
 }
 
 fn default_timeout_ms() -> u64 {

@@ -1,5 +1,7 @@
+use std::cell::Cell;
 use std::collections::HashMap;
 use std::path::PathBuf;
+use std::time::Instant;
 
 use anyhow::Context;
 use crossterm::event::{Event, KeyCode, KeyModifiers};
@@ -10,7 +12,7 @@ use senka_core::loader;
 use senka_core::redact;
 use senka_core::request::{Body, RequestDef};
 use senka_core::resolve;
-use senka_core::util::now_epoch_ms;
+use senka_core::util::{format_ts, now_epoch_ms};
 use senka_runner::execute::{self, ClientOptions, RunError};
 use senka_store::db;
 use senka_store::models::{Payload, Run, RunWithPayload};
@@ -62,9 +64,15 @@ pub struct App {
     pub log_list_idx: usize,
     pub log_detail: Option<RunWithPayload>,
 
-    // Detail pane (right panel) scroll
+    // Detail pane (right panel) scroll & selection
     pub detail_focused: bool,
     pub detail_scroll: u16,
+    pub select_mode: bool,
+    pub select_anchor: usize,
+    pub select_cursor: usize,
+    pub detail_line_count: Cell<usize>,
+    pub detail_viewport_height: Cell<usize>,
+    pub status_message: Option<(String, Instant)>,
 
     // Env
     pub active_env: Option<String>,
@@ -122,6 +130,12 @@ impl App {
             request_form: None,
             detail_focused: false,
             detail_scroll: 0,
+            select_mode: false,
+            select_anchor: 0,
+            select_cursor: 0,
+            detail_line_count: Cell::new(0),
+            detail_viewport_height: Cell::new(20),
+            status_message: None,
             tx,
             rx,
         })
@@ -153,8 +167,11 @@ impl App {
                 return self.handle_form_key(key.code, key.modifiers);
             }
 
-            // Handle detail pane scroll when focused
+            // Handle detail pane when focused
             if self.detail_focused {
+                if self.select_mode {
+                    return self.handle_select_mode_key(key.code, key.modifiers);
+                }
                 match key.code {
                     KeyCode::Up | KeyCode::Char('k') => {
                         self.detail_scroll = self.detail_scroll.saturating_sub(1);
@@ -178,6 +195,15 @@ impl App {
                     }
                     KeyCode::Esc | KeyCode::Left | KeyCode::Char('h') => {
                         self.detail_focused = false;
+                        self.select_mode = false;
+                        return true;
+                    }
+                    KeyCode::Char('v') if self.config.tui.keyboard_select => {
+                        self.enter_select_mode();
+                        return true;
+                    }
+                    KeyCode::Char('y') if self.config.tui.keyboard_select => {
+                        self.copy_all_detail();
                         return true;
                     }
                     KeyCode::Char('q') => {
@@ -275,6 +301,12 @@ impl App {
                 }
             }
         }
+        // Clear status message after 2 seconds
+        if let Some((_, ts)) = &self.status_message {
+            if ts.elapsed().as_secs() >= 2 {
+                self.status_message = None;
+            }
+        }
     }
 
     fn navigate_up(&mut self) {
@@ -326,6 +358,256 @@ impl App {
             Tab::Requests => self.response.is_some(),
             Tab::Logs => self.log_detail.is_some(),
         }
+    }
+
+    // -----------------------------------------------------------------------
+    // Text selection & copy
+    // -----------------------------------------------------------------------
+
+    fn handle_select_mode_key(&mut self, code: KeyCode, modifiers: KeyModifiers) -> bool {
+        let line_count = self.detail_line_count.get();
+        match code {
+            KeyCode::Up | KeyCode::Char('k') => {
+                self.select_cursor = self.select_cursor.saturating_sub(1);
+                self.scroll_to_cursor();
+            }
+            KeyCode::Down | KeyCode::Char('j') => {
+                if self.select_cursor < line_count.saturating_sub(1) {
+                    self.select_cursor += 1;
+                }
+                self.scroll_to_cursor();
+            }
+            KeyCode::PageUp => {
+                let page = self.detail_viewport_height.get().max(1);
+                self.select_cursor = self.select_cursor.saturating_sub(page);
+                self.scroll_to_cursor();
+            }
+            KeyCode::PageDown => {
+                let page = self.detail_viewport_height.get().max(1);
+                self.select_cursor =
+                    (self.select_cursor + page).min(line_count.saturating_sub(1));
+                self.scroll_to_cursor();
+            }
+            KeyCode::Home => {
+                self.select_cursor = 0;
+                self.scroll_to_cursor();
+            }
+            KeyCode::End => {
+                self.select_cursor = line_count.saturating_sub(1);
+                self.scroll_to_cursor();
+            }
+            KeyCode::Char('y') | KeyCode::Enter => {
+                self.copy_selection();
+            }
+            KeyCode::Esc | KeyCode::Char('v') => {
+                self.select_mode = false;
+            }
+            KeyCode::Char('q') => {
+                self.should_quit = true;
+            }
+            KeyCode::Char('c') if modifiers.contains(KeyModifiers::CONTROL) => {
+                self.should_quit = true;
+            }
+            _ => return false,
+        }
+        true
+    }
+
+    fn enter_select_mode(&mut self) {
+        let lines = self.current_detail_lines();
+        if lines.is_empty() {
+            return;
+        }
+        self.detail_line_count.set(lines.len());
+        self.select_mode = true;
+        let start = (self.detail_scroll as usize).min(lines.len().saturating_sub(1));
+        self.select_anchor = start;
+        self.select_cursor = start;
+    }
+
+    fn scroll_to_cursor(&mut self) {
+        let cursor = self.select_cursor as u16;
+        if cursor < self.detail_scroll {
+            self.detail_scroll = cursor;
+        }
+        let viewport = self.detail_viewport_height.get() as u16;
+        if viewport > 0 && cursor >= self.detail_scroll + viewport {
+            self.detail_scroll = cursor - viewport + 1;
+        }
+    }
+
+    fn copy_selection(&mut self) {
+        let lines = self.current_detail_lines();
+        let start = self.select_anchor.min(self.select_cursor);
+        let end = (self.select_anchor.max(self.select_cursor)).min(lines.len().saturating_sub(1));
+        let text: String = lines[start..=end].join("\n");
+        self.copy_to_clipboard(&text);
+        self.select_mode = false;
+    }
+
+    fn copy_all_detail(&mut self) {
+        let lines = self.current_detail_lines();
+        if lines.is_empty() {
+            return;
+        }
+        let text = lines.join("\n");
+        self.copy_to_clipboard(&text);
+    }
+
+    fn copy_to_clipboard(&mut self, text: &str) {
+        use std::io::Write;
+        use std::process::{Command, Stdio};
+
+        let result = if cfg!(target_os = "windows") {
+            Command::new("clip")
+                .stdin(Stdio::piped())
+                .spawn()
+                .and_then(|mut child| {
+                    if let Some(ref mut stdin) = child.stdin {
+                        stdin.write_all(text.as_bytes())?;
+                    }
+                    child.wait()
+                })
+        } else if cfg!(target_os = "macos") {
+            Command::new("pbcopy")
+                .stdin(Stdio::piped())
+                .spawn()
+                .and_then(|mut child| {
+                    if let Some(ref mut stdin) = child.stdin {
+                        stdin.write_all(text.as_bytes())?;
+                    }
+                    child.wait()
+                })
+        } else {
+            // Linux: try xclip, fall back to xsel
+            Command::new("xclip")
+                .args(["-selection", "clipboard"])
+                .stdin(Stdio::piped())
+                .spawn()
+                .or_else(|_| {
+                    Command::new("xsel")
+                        .args(["--clipboard", "--input"])
+                        .stdin(Stdio::piped())
+                        .spawn()
+                })
+                .and_then(|mut child| {
+                    if let Some(ref mut stdin) = child.stdin {
+                        stdin.write_all(text.as_bytes())?;
+                    }
+                    child.wait()
+                })
+        };
+
+        match result {
+            Ok(status) if status.success() => {
+                self.status_message = Some(("Copied!".to_string(), Instant::now()));
+            }
+            _ => {
+                self.status_message = Some(("Copy failed".to_string(), Instant::now()));
+            }
+        }
+    }
+
+    fn current_detail_lines(&self) -> Vec<String> {
+        match self.current_tab {
+            Tab::Requests => {
+                if let Some(ref resp) = self.response {
+                    Self::build_response_lines(resp)
+                } else {
+                    Vec::new()
+                }
+            }
+            Tab::Logs => {
+                if let Some(ref detail) = self.log_detail {
+                    Self::build_log_detail_lines(detail)
+                } else {
+                    Vec::new()
+                }
+            }
+        }
+    }
+
+    fn build_response_lines(resp: &ResponseView) -> Vec<String> {
+        let mut lines = Vec::new();
+        if let Some(ref err) = resp.error {
+            lines.push(format!("Error: {err}"));
+        } else {
+            let status_str = match resp.status {
+                Some(s) => format!("{s} {}", resp.status_text),
+                None => "ERR".to_string(),
+            };
+            lines.push(status_str);
+            lines.push(format!("Duration: {} ms", resp.duration_ms));
+            lines.push(String::new());
+
+            if !resp.headers_text.is_empty() {
+                lines.push("--- Headers ---".to_string());
+                for line in resp.headers_text.lines() {
+                    lines.push(line.to_string());
+                }
+                lines.push(String::new());
+            }
+
+            if !resp.body_text.is_empty() {
+                lines.push("--- Body ---".to_string());
+                for line in resp.body_text.lines() {
+                    lines.push(line.to_string());
+                }
+            }
+        }
+        lines
+    }
+
+    fn build_log_detail_lines(detail: &RunWithPayload) -> Vec<String> {
+        let status_str = match detail.run.status {
+            Some(s) => s.to_string(),
+            None => "ERR".to_string(),
+        };
+
+        let mut lines = vec![
+            format!("ID:       {}", detail.run.id),
+            format!("Time:     {}", format_ts(detail.run.ts)),
+            format!("Request:  {}", detail.run.request_name),
+            format!("Method:   {}", detail.run.method),
+            format!("URL:      {}", detail.run.url),
+            format!("Status:   {status_str}"),
+            format!("Duration: {} ms", detail.run.duration_ms),
+            format!("Env:      {}", detail.run.env),
+        ];
+
+        if let Some(ref err) = detail.run.error {
+            lines.push(format!("Error:    {err}"));
+        }
+
+        lines.push(String::new());
+        lines.push("--- Request Headers ---".to_string());
+        for line in detail.request_headers.lines() {
+            lines.push(line.to_string());
+        }
+
+        if let Some(ref body) = detail.request_body {
+            lines.push(String::new());
+            lines.push("--- Request Body ---".to_string());
+            for line in body.lines() {
+                lines.push(line.to_string());
+            }
+        }
+
+        lines.push(String::new());
+        lines.push("--- Response Headers ---".to_string());
+        for line in detail.response_headers.lines() {
+            lines.push(line.to_string());
+        }
+
+        if let Some(ref body) = detail.response_body {
+            lines.push(String::new());
+            lines.push("--- Response Body ---".to_string());
+            for line in body.lines() {
+                lines.push(line.to_string());
+            }
+        }
+
+        lines
     }
 
     fn handle_enter(&mut self) {

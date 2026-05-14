@@ -71,6 +71,9 @@ logging:
   enabled: true
   max_body_kb: 256
   retention_days: 30
+
+tui:
+  keyboard_select: false  # Enable v/y keyboard text selection in detail panel
 ```
 
 ## Request Files
@@ -221,16 +224,37 @@ Export all log entries to stdout as JSONL.
 
 ### `senka tui` *(requires `--features tui`)*
 
-Launch the interactive terminal UI.
+Launch the interactive terminal UI. Text in the detail panel can be selected and copied using your terminal's native mouse selection.
 
 | Key | Action |
 |-----|--------|
 | `Tab` | Switch between Requests / Logs tabs |
 | `↑` / `↓` or `j` / `k` | Navigate list |
+| `→` / `l` | Focus detail panel (right side) |
 | `Enter` | Run selected request (Requests tab) / Load detail (Logs tab) |
+| `n` | New request (Requests tab) |
 | `e` | Open environment selector |
-| `Esc` | Clear response / close popup |
+| `Esc` | Clear response / back / close popup |
 | `q` / `Ctrl+C` | Quit |
+
+**Detail panel** (when focused with `→`):
+
+| Key | Action |
+|-----|--------|
+| `↑` / `↓` or `j` / `k` | Scroll |
+| `PgUp` / `PgDn` | Page scroll |
+| `Home` | Scroll to top |
+| `Esc` / `←` | Back to list |
+
+**Keyboard selection** (requires `tui.keyboard_select: true` in `senka.yml`):
+
+| Key | Action |
+|-----|--------|
+| `y` | Copy entire panel to clipboard |
+| `v` | Enter visual selection mode |
+| `↑` / `↓` | Extend selection (in selection mode) |
+| `y` / `Enter` | Copy selection to clipboard |
+| `Esc` | Cancel selection |
 
 ## Secrets
 

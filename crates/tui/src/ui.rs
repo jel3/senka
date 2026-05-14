@@ -9,9 +9,26 @@ use senka_core::util::format_ts;
 use crate::app::{App, Tab};
 use crate::form::{FormRow, RequestForm, TextInput};
 
+const BANNER: [&str; 5] = [
+    "                 _         ",
+    " ___  ___ _ __ | | ____ _ ",
+    "/ __|/ _ \\ '_ \\| |/ / _` |",
+    "\\__ \\  __/ | | |   < (_| |",
+    "|___/\\___|_| |_|_|\\_\\__,_|",
+];
+
 /// Returns true if color should be disabled.
 fn no_color() -> bool {
     std::env::var_os("NO_COLOR").is_some()
+}
+
+/// Style for text selection highlighting.
+fn select_highlight_style() -> Style {
+    if no_color() {
+        Style::default().add_modifier(Modifier::REVERSED)
+    } else {
+        Style::default().bg(ratatui::style::Color::DarkGray)
+    }
 }
 
 /// Style for selected/highlighted items. Uses reversed if NO_COLOR, else cyan.
@@ -109,7 +126,7 @@ fn draw_title_bar(f: &mut Frame, app: &App, area: Rect) {
 fn draw_requests_tab(f: &mut Frame, app: &App, area: Rect) {
     let chunks = Layout::default()
         .direction(Direction::Horizontal)
-        .constraints([Constraint::Percentage(40), Constraint::Percentage(60)])
+        .constraints([Constraint::Percentage(30), Constraint::Percentage(70)])
         .split(area);
 
     // Left: request list
@@ -137,14 +154,12 @@ fn draw_requests_tab(f: &mut Frame, app: &App, area: Rect) {
         let text = Paragraph::new("Running request...")
             .block(Block::default().borders(Borders::ALL).title("Response"));
         f.render_widget(text, chunks[1]);
-    } else if let Some(ref resp) = app.response {
-        draw_response_view(f, resp, chunks[1], app.detail_scroll, app.detail_focused);
+    } else if app.response.is_some() {
+        draw_response_view(f, app, chunks[1]);
     } else if let Some(ref req) = app.loaded_request {
         draw_request_preview(f, req, chunks[1]);
     } else {
-        let text = Paragraph::new("No request selected")
-            .block(Block::default().borders(Borders::ALL).title("Detail"));
-        f.render_widget(text, chunks[1]);
+        draw_welcome(f, chunks[1]);
     }
 }
 
@@ -200,13 +215,8 @@ fn draw_request_preview(f: &mut Frame, req: &senka_core::request::RequestDef, ar
     f.render_widget(text, area);
 }
 
-fn draw_response_view(
-    f: &mut Frame,
-    resp: &crate::app::ResponseView,
-    area: Rect,
-    scroll: u16,
-    focused: bool,
-) {
+fn draw_response_view(f: &mut Frame, app: &crate::app::App, area: Rect) {
+    let resp = app.response.as_ref().unwrap();
     let mut lines = Vec::new();
 
     if let Some(ref err) = resp.error {
@@ -242,24 +252,53 @@ fn draw_response_view(
         }
     }
 
-    let title = if focused {
+    let title = if app.select_mode {
+        "Response (↑↓:select  y:copy  Esc:cancel)"
+    } else if app.detail_focused && app.config.tui.keyboard_select {
+        "Response (↑↓:scroll  v:select  y:copy all  Esc:back)"
+    } else if app.detail_focused {
         "Response (↑↓:scroll  Esc:back)"
     } else {
         "Response (→:focus)"
     };
-    let border_style = if focused {
+    let border_style = if app.detail_focused {
         highlight_style()
     } else {
         Style::default()
     };
+
+    let block = Block::default()
+        .borders(Borders::ALL)
+        .title(title)
+        .border_style(border_style);
+    let inner = block.inner(area);
+    app.detail_line_count.set(lines.len());
+    app.detail_viewport_height.set(inner.height as usize);
+
+    // Apply selection highlighting
+    if app.select_mode {
+        let sel_start = app.select_anchor.min(app.select_cursor);
+        let sel_end = app.select_anchor.max(app.select_cursor);
+        for (i, line) in lines.iter_mut().enumerate() {
+            if i >= sel_start && i <= sel_end {
+                let new_spans: Vec<Span> = line
+                    .spans
+                    .drain(..)
+                    .map(|span| {
+                        Span::styled(
+                            span.content.to_string(),
+                            span.style.patch(select_highlight_style()),
+                        )
+                    })
+                    .collect();
+                *line = Line::from(new_spans);
+            }
+        }
+    }
+
     let text = Paragraph::new(lines)
-        .block(
-            Block::default()
-                .borders(Borders::ALL)
-                .title(title)
-                .border_style(border_style),
-        )
-        .scroll((scroll, 0))
+        .block(block)
+        .scroll((app.detail_scroll, 0))
         .wrap(Wrap { trim: false });
     f.render_widget(text, area);
 }
@@ -267,7 +306,7 @@ fn draw_response_view(
 fn draw_logs_tab(f: &mut Frame, app: &App, area: Rect) {
     let chunks = Layout::default()
         .direction(Direction::Horizontal)
-        .constraints([Constraint::Percentage(40), Constraint::Percentage(60)])
+        .constraints([Constraint::Percentage(30), Constraint::Percentage(70)])
         .split(area);
 
     // Left: log entries list
@@ -299,22 +338,15 @@ fn draw_logs_tab(f: &mut Frame, app: &App, area: Rect) {
     f.render_stateful_widget(list, chunks[0], &mut state);
 
     // Right: log detail
-    if let Some(ref detail) = app.log_detail {
-        draw_log_detail(f, detail, chunks[1], app.detail_scroll, app.detail_focused);
+    if app.log_detail.is_some() {
+        draw_log_detail(f, app, chunks[1]);
     } else {
-        let text = Paragraph::new("Press Enter to view log details")
-            .block(Block::default().borders(Borders::ALL).title("Detail"));
-        f.render_widget(text, chunks[1]);
+        draw_welcome(f, chunks[1]);
     }
 }
 
-fn draw_log_detail(
-    f: &mut Frame,
-    detail: &senka_store::models::RunWithPayload,
-    area: Rect,
-    scroll: u16,
-    focused: bool,
-) {
+fn draw_log_detail(f: &mut Frame, app: &crate::app::App, area: Rect) {
+    let detail = app.log_detail.as_ref().unwrap();
     let status_str = match detail.run.status {
         Some(s) => s.to_string(),
         None => "ERR".to_string(),
@@ -363,24 +395,53 @@ fn draw_log_detail(
         }
     }
 
-    let title = if focused {
+    let title = if app.select_mode {
+        "Log Detail (↑↓:select  y:copy  Esc:cancel)"
+    } else if app.detail_focused && app.config.tui.keyboard_select {
+        "Log Detail (↑↓:scroll  v:select  y:copy all  Esc:back)"
+    } else if app.detail_focused {
         "Log Detail (↑↓:scroll  Esc:back)"
     } else {
         "Log Detail (→:focus)"
     };
-    let border_style = if focused {
+    let border_style = if app.detail_focused {
         highlight_style()
     } else {
         Style::default()
     };
+
+    let block = Block::default()
+        .borders(Borders::ALL)
+        .title(title)
+        .border_style(border_style);
+    let inner = block.inner(area);
+    app.detail_line_count.set(lines.len());
+    app.detail_viewport_height.set(inner.height as usize);
+
+    // Apply selection highlighting
+    if app.select_mode {
+        let sel_start = app.select_anchor.min(app.select_cursor);
+        let sel_end = app.select_anchor.max(app.select_cursor);
+        for (i, line) in lines.iter_mut().enumerate() {
+            if i >= sel_start && i <= sel_end {
+                let new_spans: Vec<Span> = line
+                    .spans
+                    .drain(..)
+                    .map(|span| {
+                        Span::styled(
+                            span.content.to_string(),
+                            span.style.patch(select_highlight_style()),
+                        )
+                    })
+                    .collect();
+                *line = Line::from(new_spans);
+            }
+        }
+    }
+
     let text = Paragraph::new(lines)
-        .block(
-            Block::default()
-                .borders(Borders::ALL)
-                .title(title)
-                .border_style(border_style),
-        )
-        .scroll((scroll, 0))
+        .block(block)
+        .scroll((app.detail_scroll, 0))
         .wrap(Wrap { trim: false });
     f.render_widget(text, area);
 }
@@ -536,6 +597,32 @@ fn display_text_field(input: &TextInput, editing: bool) -> String {
     }
 }
 
+fn draw_welcome(f: &mut Frame, area: Rect) {
+    let banner_style = if no_color() {
+        Style::default().add_modifier(Modifier::BOLD)
+    } else {
+        Style::default()
+            .fg(ratatui::style::Color::Cyan)
+            .add_modifier(Modifier::BOLD)
+    };
+
+    let mut lines: Vec<Line> = Vec::new();
+    lines.push(Line::from(""));
+    for banner_line in &BANNER {
+        lines.push(Line::from(Span::styled(*banner_line, banner_style)));
+    }
+    lines.push(Line::from(""));
+    lines.push(Line::from("  CLI-first HTTP execution engine"));
+    lines.push(Line::from(""));
+    lines.push(Line::from("  Enter: run request   n: new request"));
+    lines.push(Line::from("  Tab: switch tab      e: select env"));
+    lines.push(Line::from("  q: quit"));
+
+    let text = Paragraph::new(lines)
+        .block(Block::default().borders(Borders::ALL));
+    f.render_widget(text, area);
+}
+
 fn draw_status_bar(f: &mut Frame, app: &App, area: Rect) {
     let bold = Style::default().add_modifier(Modifier::BOLD);
 
@@ -563,19 +650,50 @@ fn draw_status_bar(f: &mut Frame, app: &App, area: Rect) {
                 Span::raw(":cancel"),
             ])
         }
-    } else if app.detail_focused {
+    } else if app.select_mode && app.detail_focused {
         Line::from(vec![
+            Span::styled(" \u{2191}\u{2193}", bold),
+            Span::raw(":select  "),
+            Span::styled("PgUp/PgDn", bold),
+            Span::raw(":page  "),
+            Span::styled("y/Enter", bold),
+            Span::raw(":copy  "),
+            Span::styled("Esc", bold),
+            Span::raw(":cancel  "),
+            Span::styled("q", bold),
+            Span::raw(":quit"),
+        ])
+    } else if app.detail_focused {
+        let mut spans = vec![
             Span::styled(" \u{2191}\u{2193}", bold),
             Span::raw(":scroll  "),
             Span::styled("PgUp/PgDn", bold),
             Span::raw(":page  "),
             Span::styled("Home", bold),
             Span::raw(":top  "),
+        ];
+        if app.config.tui.keyboard_select {
+            spans.extend([
+                Span::styled("v", bold),
+                Span::raw(":select  "),
+                Span::styled("y", bold),
+                Span::raw(":copy all  "),
+            ]);
+        }
+        spans.extend([
             Span::styled("Esc/\u{2190}", bold),
             Span::raw(":back  "),
             Span::styled("q", bold),
             Span::raw(":quit"),
-        ])
+        ]);
+        if let Some((ref msg, _)) = app.status_message {
+            spans.push(Span::raw("  "));
+            spans.push(Span::styled(
+                format!("[{msg}]"),
+                Style::default().add_modifier(Modifier::BOLD),
+            ));
+        }
+        Line::from(spans)
     } else if app.current_tab == Tab::Logs {
         Line::from(vec![
             Span::styled(" Tab", bold),
