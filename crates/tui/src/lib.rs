@@ -36,6 +36,11 @@ pub async fn run() -> anyhow::Result<()> {
         original_hook(panic_info);
     }));
 
+    // Drain any buffered input events (e.g. the Enter key that launched this command)
+    while event::poll(std::time::Duration::from_millis(0))? {
+        let _ = event::read()?;
+    }
+
     // Main loop
     let result = run_loop(&mut terminal, &mut app).await;
 

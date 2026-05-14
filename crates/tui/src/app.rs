@@ -240,6 +240,7 @@ impl App {
     fn reload_request_detail(&mut self) {
         if let Some(name) = self.request_names.get(self.req_list_idx) {
             self.loaded_request = loader::load_request(&self.root, name).ok();
+            self.response = None;
         }
     }
 
