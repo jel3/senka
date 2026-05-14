@@ -14,6 +14,8 @@ pub fn handle(action: LogAction, json: bool, no_color: bool) -> anyhow::Result<(
         LogAction::Show { id } => handle_show(&id, json, no_color),
         LogAction::Prune { keep } => handle_prune(&keep),
         LogAction::Export => handle_export(),
+        LogAction::Clear => handle_clear(),
+        LogAction::Delete { id, since, status, req } => handle_delete(id, since, status, req),
     }
 }
 
@@ -142,6 +144,58 @@ fn handle_export() -> anyhow::Result<()> {
     let mut writer = stdout.lock();
     let count = db::export_jsonl(&conn, &mut writer)?;
     eprintln!("exported {count} entries");
+    Ok(())
+}
+
+fn handle_clear() -> anyhow::Result<()> {
+    let conn = open_log_db()?;
+    let deleted = db::clear(&conn)?;
+    eprintln!("cleared {deleted} log entries");
+    Ok(())
+}
+
+fn handle_delete(
+    id: Option<String>,
+    since: Option<String>,
+    status: Option<u16>,
+    req: Option<String>,
+) -> anyhow::Result<()> {
+    let conn = open_log_db()?;
+
+    // If an ID is provided, delete that single entry
+    if let Some(ref id) = id {
+        let found = db::delete_by_id(&conn, id)?;
+        if found {
+            eprintln!("deleted log entry '{id}'");
+        } else {
+            anyhow::bail!("no log entry found with id '{id}'");
+        }
+        return Ok(());
+    }
+
+    // Otherwise use filters (at least one must be provided)
+    if since.is_none() && status.is_none() && req.is_none() {
+        anyhow::bail!("provide an ID or at least one filter (--since, --status, --req)");
+    }
+
+    let since_ts = match since {
+        Some(ref s) => {
+            let duration_ms = db::parse_duration_str(s)
+                .map_err(|e| anyhow::anyhow!("{e}"))?;
+            let now = now_epoch_ms();
+            Some(now.saturating_sub(duration_ms))
+        }
+        None => None,
+    };
+
+    let filters = ListFilters {
+        since: since_ts,
+        status,
+        request_name: req,
+    };
+
+    let deleted = db::delete_filtered(&conn, &filters)?;
+    eprintln!("deleted {deleted} log entries");
     Ok(())
 }
 

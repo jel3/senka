@@ -47,6 +47,7 @@ regex = "1"
 
 # Password input
 rpassword = "7"
+rand = "0.8"
 
 # Error handling
 thiserror = "2"

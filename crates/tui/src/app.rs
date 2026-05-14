@@ -15,6 +15,8 @@ use senka_runner::execute::{self, ClientOptions, RunError};
 use senka_store::db;
 use senka_store::models::{Payload, Run, RunWithPayload};
 
+use crate::form::{FormRow, RequestForm};
+
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum Tab {
     Requests,
@@ -60,9 +62,16 @@ pub struct App {
     pub log_list_idx: usize,
     pub log_detail: Option<RunWithPayload>,
 
+    // Detail pane (right panel) scroll
+    pub detail_focused: bool,
+    pub detail_scroll: u16,
+
     // Env
     pub active_env: Option<String>,
     pub env_popup: Option<EnvSelector>,
+
+    // Request form editor
+    pub request_form: Option<RequestForm>,
 
     // Async
     tx: mpsc::UnboundedSender<TaskResult>,
@@ -110,6 +119,9 @@ impl App {
             log_detail: None,
             active_env,
             env_popup: None,
+            request_form: None,
+            detail_focused: false,
+            detail_scroll: 0,
             tx,
             rx,
         })
@@ -125,9 +137,59 @@ impl App {
 
     pub fn handle_event(&mut self, ev: Event) -> bool {
         if let Event::Key(key) = ev {
+            // Only process key-press events; ignore key-release and repeat
+            // (on Windows, crossterm reports both Press and Release)
+            if key.kind != crossterm::event::KeyEventKind::Press {
+                return false;
+            }
+
             // Handle env popup first if open
             if self.env_popup.is_some() {
                 return self.handle_env_popup_key(key.code);
+            }
+
+            // Handle request form if open
+            if self.request_form.is_some() {
+                return self.handle_form_key(key.code, key.modifiers);
+            }
+
+            // Handle detail pane scroll when focused
+            if self.detail_focused {
+                match key.code {
+                    KeyCode::Up | KeyCode::Char('k') => {
+                        self.detail_scroll = self.detail_scroll.saturating_sub(1);
+                        return true;
+                    }
+                    KeyCode::Down | KeyCode::Char('j') => {
+                        self.detail_scroll = self.detail_scroll.saturating_add(1);
+                        return true;
+                    }
+                    KeyCode::PageUp => {
+                        self.detail_scroll = self.detail_scroll.saturating_sub(20);
+                        return true;
+                    }
+                    KeyCode::PageDown => {
+                        self.detail_scroll = self.detail_scroll.saturating_add(20);
+                        return true;
+                    }
+                    KeyCode::Home => {
+                        self.detail_scroll = 0;
+                        return true;
+                    }
+                    KeyCode::Esc | KeyCode::Left | KeyCode::Char('h') => {
+                        self.detail_focused = false;
+                        return true;
+                    }
+                    KeyCode::Char('q') => {
+                        self.should_quit = true;
+                        return true;
+                    }
+                    KeyCode::Char('c') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                        self.should_quit = true;
+                        return true;
+                    }
+                    _ => { return false; }
+                }
             }
 
             match key.code {
@@ -144,6 +206,12 @@ impl App {
                         Tab::Requests => Tab::Logs,
                         Tab::Logs => Tab::Requests,
                     };
+                    self.detail_focused = false;
+                    self.detail_scroll = 0;
+                    return true;
+                }
+                KeyCode::Char('n') if self.current_tab == Tab::Requests => {
+                    self.open_new_request_form();
                     return true;
                 }
                 KeyCode::Char('e') => {
@@ -158,14 +226,35 @@ impl App {
                     self.navigate_down();
                     return true;
                 }
+                KeyCode::Right | KeyCode::Char('l') => {
+                    if self.has_detail_content() {
+                        self.detail_focused = true;
+                        self.detail_scroll = 0;
+                        return true;
+                    }
+                }
                 KeyCode::Enter => {
                     self.handle_enter();
                     return true;
                 }
                 KeyCode::Esc => {
                     match self.current_tab {
-                        Tab::Requests => self.response = None,
-                        Tab::Logs => self.log_detail = None,
+                        Tab::Requests => {
+                            self.response = None;
+                            self.detail_scroll = 0;
+                        }
+                        Tab::Logs => {
+                            self.log_detail = None;
+                            self.detail_scroll = 0;
+                        }
+                    }
+                    return true;
+                }
+                KeyCode::Char('d') if self.current_tab == Tab::Logs => {
+                    if key.modifiers.contains(KeyModifiers::CONTROL) {
+                        self.clear_logs();
+                    } else {
+                        self.delete_selected_log();
                     }
                     return true;
                 }
@@ -194,11 +283,15 @@ impl App {
                 if self.req_list_idx > 0 {
                     self.req_list_idx -= 1;
                     self.reload_request_detail();
+                    self.detail_scroll = 0;
+                    self.detail_focused = false;
                 }
             }
             Tab::Logs => {
                 if self.log_list_idx > 0 {
                     self.log_list_idx -= 1;
+                    self.detail_scroll = 0;
+                    self.detail_focused = false;
                 }
             }
         }
@@ -212,6 +305,8 @@ impl App {
                 {
                     self.req_list_idx += 1;
                     self.reload_request_detail();
+                    self.detail_scroll = 0;
+                    self.detail_focused = false;
                 }
             }
             Tab::Logs => {
@@ -219,8 +314,17 @@ impl App {
                     && self.log_list_idx < self.log_entries.len() - 1
                 {
                     self.log_list_idx += 1;
+                    self.detail_scroll = 0;
+                    self.detail_focused = false;
                 }
             }
+        }
+    }
+
+    fn has_detail_content(&self) -> bool {
+        match self.current_tab {
+            Tab::Requests => self.response.is_some(),
+            Tab::Logs => self.log_detail.is_some(),
         }
     }
 
@@ -229,10 +333,12 @@ impl App {
             Tab::Requests => {
                 if !self.is_running {
                     self.execute_selected_request();
+                    self.detail_scroll = 0;
                 }
             }
             Tab::Logs => {
                 self.reload_log_detail();
+                self.detail_scroll = 0;
             }
         }
     }
@@ -251,6 +357,36 @@ impl App {
                 self.log_detail = db::show(&conn, &run.id).ok().flatten();
             }
         }
+    }
+
+    fn clear_logs(&mut self) {
+        let db_path = self.root.join(".senka").join("logs.db");
+        if let Ok(conn) = db::open(&db_path) {
+            let _ = db::clear(&conn);
+        }
+        self.log_entries.clear();
+        self.log_list_idx = 0;
+        self.log_detail = None;
+        self.detail_scroll = 0;
+        self.detail_focused = false;
+    }
+
+    fn delete_selected_log(&mut self) {
+        let id = match self.log_entries.get(self.log_list_idx) {
+            Some(run) => run.id.clone(),
+            None => return,
+        };
+        let db_path = self.root.join(".senka").join("logs.db");
+        if let Ok(conn) = db::open(&db_path) {
+            let _ = db::delete_by_id(&conn, &id);
+        }
+        self.log_entries.remove(self.log_list_idx);
+        if self.log_list_idx >= self.log_entries.len() && self.log_list_idx > 0 {
+            self.log_list_idx -= 1;
+        }
+        self.log_detail = None;
+        self.detail_scroll = 0;
+        self.detail_focused = false;
     }
 
     fn execute_selected_request(&mut self) {
@@ -396,6 +532,161 @@ impl App {
 
             let _ = tx.send(TaskResult::RequestDone(view));
         });
+    }
+
+    // -----------------------------------------------------------------------
+    // Request form
+    // -----------------------------------------------------------------------
+
+    fn open_new_request_form(&mut self) {
+        self.request_form = Some(RequestForm::new_blank());
+    }
+
+    fn handle_form_key(&mut self, code: KeyCode, modifiers: KeyModifiers) -> bool {
+        let form = self.request_form.as_mut().unwrap();
+
+        // Clear previous error on any key press
+        form.error_message = None;
+
+        // Ctrl+S: save from anywhere
+        if code == KeyCode::Char('s') && modifiers.contains(KeyModifiers::CONTROL) {
+            return self.save_request_form();
+        }
+
+        if form.editing {
+            // === EDITING MODE ===
+            match code {
+                KeyCode::Esc | KeyCode::Enter => {
+                    form.editing = false;
+                }
+                KeyCode::Char(ch) => {
+                    if let Some(input) = form.focused_text_input_mut() {
+                        input.insert_char(ch);
+                    }
+                }
+                KeyCode::Backspace => {
+                    if let Some(input) = form.focused_text_input_mut() {
+                        input.delete_back();
+                    }
+                }
+                KeyCode::Delete => {
+                    if let Some(input) = form.focused_text_input_mut() {
+                        input.delete_forward();
+                    }
+                }
+                KeyCode::Left => {
+                    if let Some(input) = form.focused_text_input_mut() {
+                        input.move_left();
+                    }
+                }
+                KeyCode::Right => {
+                    if let Some(input) = form.focused_text_input_mut() {
+                        input.move_right();
+                    }
+                }
+                KeyCode::Home => {
+                    if let Some(input) = form.focused_text_input_mut() {
+                        input.move_home();
+                    }
+                }
+                KeyCode::End => {
+                    if let Some(input) = form.focused_text_input_mut() {
+                        input.move_end();
+                    }
+                }
+                _ => {}
+            }
+        } else {
+            // === NAVIGATION MODE ===
+            match code {
+                KeyCode::Esc | KeyCode::Char('q') => {
+                    self.request_form = None;
+                    return true;
+                }
+                KeyCode::Up | KeyCode::Char('k') => {
+                    form.focus_up();
+                }
+                KeyCode::Down | KeyCode::Char('j') => {
+                    form.focus_down();
+                }
+                KeyCode::Enter => {
+                    if matches!(form.rows.get(form.focused_row), Some(FormRow::Save)) {
+                        return self.save_request_form();
+                    } else if form.focused_is_action() {
+                        form.activate_action();
+                    } else if form.focused_is_selector() {
+                        // Selectors use Left/Right, Enter does nothing
+                    } else if form.focused_text_input().is_some() {
+                        form.editing = true;
+                    }
+                }
+                KeyCode::Left | KeyCode::Char('h') => {
+                    if form.focused_is_selector() {
+                        form.cycle_left();
+                        form.rebuild_rows();
+                    }
+                }
+                KeyCode::Right | KeyCode::Char('l') => {
+                    if form.focused_is_selector() {
+                        form.cycle_right();
+                        form.rebuild_rows();
+                    }
+                }
+                KeyCode::Char('d') if modifiers.contains(KeyModifiers::CONTROL) => {
+                    if let Some((kind, idx)) = form.focused_is_deletable_pair() {
+                        form.delete_pair(kind, idx);
+                    }
+                }
+                _ => {}
+            }
+        }
+        true
+    }
+
+    fn save_request_form(&mut self) -> bool {
+        let form = self.request_form.as_mut().unwrap();
+
+        if let Err(msg) = form.validate(&self.request_names) {
+            form.error_message = Some(msg);
+            return true;
+        }
+
+        let req = form.to_request_def();
+        let req_dir = self.root.join("senka-requests");
+
+        if let Err(e) = std::fs::create_dir_all(&req_dir) {
+            form.error_message = Some(format!("failed to create directory: {e}"));
+            return true;
+        }
+
+        let file_path = req_dir.join(format!("{}.yml", req.name));
+
+        if file_path.exists() {
+            form.error_message = Some(format!("file already exists: {}", file_path.display()));
+            return true;
+        }
+
+        let yaml = match serde_yaml::to_string(&req) {
+            Ok(y) => y,
+            Err(e) => {
+                form.error_message = Some(format!("serialization error: {e}"));
+                return true;
+            }
+        };
+
+        if let Err(e) = std::fs::write(&file_path, &yaml) {
+            form.error_message = Some(format!("failed to write file: {e}"));
+            return true;
+        }
+
+        // Refresh request list and select the new entry
+        self.request_names = loader::list_requests(&self.root).unwrap_or_default();
+        if let Some(pos) = self.request_names.iter().position(|n| n == &req.name) {
+            self.req_list_idx = pos;
+        }
+        self.reload_request_detail();
+        self.request_form = None;
+        true
     }
 
     fn open_env_popup(&mut self) {

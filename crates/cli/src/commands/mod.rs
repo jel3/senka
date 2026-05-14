@@ -132,6 +132,22 @@ pub enum LogAction {
     },
     /// Export logs as JSONL.
     Export,
+    /// Delete all log entries.
+    Clear,
+    /// Delete log entries by ID or filters.
+    Delete {
+        /// Delete a single entry by ID.
+        id: Option<String>,
+        /// Delete entries with timestamp >= now - duration (e.g. 1h, 7d).
+        #[arg(long)]
+        since: Option<String>,
+        /// Delete entries matching this HTTP status code.
+        #[arg(long)]
+        status: Option<u16>,
+        /// Delete entries matching this request name (substring).
+        #[arg(long)]
+        req: Option<String>,
+    },
 }
 
 pub async fn dispatch(cmd: Command) -> anyhow::Result<()> {

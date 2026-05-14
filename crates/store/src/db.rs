@@ -218,6 +218,55 @@ pub fn prune(conn: &Connection, cutoff_ts: u64) -> Result<usize, StoreError> {
     Ok(deleted)
 }
 
+/// Delete all runs and payloads. Returns the number of deleted rows.
+pub fn clear(conn: &Connection) -> Result<usize, StoreError> {
+    let deleted = conn.execute("DELETE FROM runs", [])?;
+    Ok(deleted)
+}
+
+/// Delete a single run by ID. Returns true if a row was deleted.
+pub fn delete_by_id(conn: &Connection, id: &str) -> Result<bool, StoreError> {
+    let deleted = conn.execute("DELETE FROM runs WHERE id = ?1", params![id])?;
+    Ok(deleted > 0)
+}
+
+/// Delete runs matching the given filters. Returns the number of deleted rows.
+pub fn delete_filtered(conn: &Connection, filters: &ListFilters) -> Result<usize, StoreError> {
+    let mut sql = String::from("DELETE FROM runs");
+    let mut conditions = Vec::new();
+
+    if filters.since.is_some() {
+        conditions.push("ts >= ?".to_string());
+    }
+    if filters.status.is_some() {
+        conditions.push("status = ?".to_string());
+    }
+    if filters.request_name.is_some() {
+        conditions.push("request_name LIKE ?".to_string());
+    }
+
+    if !conditions.is_empty() {
+        sql.push_str(" WHERE ");
+        sql.push_str(&conditions.join(" AND "));
+    }
+
+    let mut bound: Vec<Box<dyn rusqlite::types::ToSql>> = Vec::new();
+
+    if let Some(since) = filters.since {
+        bound.push(Box::new(since));
+    }
+    if let Some(status) = filters.status {
+        bound.push(Box::new(status));
+    }
+    if let Some(ref name) = filters.request_name {
+        bound.push(Box::new(format!("%{name}%")));
+    }
+
+    let params_ref: Vec<&dyn rusqlite::types::ToSql> = bound.iter().map(|b| b.as_ref()).collect();
+    let deleted = conn.execute(&sql, params_ref.as_slice())?;
+    Ok(deleted)
+}
+
 /// Export all runs+payloads as JSONL to the given writer.
 /// Returns the number of exported rows.
 pub fn export_jsonl<W: Write>(conn: &Connection, writer: &mut W) -> Result<usize, StoreError> {

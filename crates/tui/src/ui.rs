@@ -7,6 +7,7 @@ use ratatui::Frame;
 use senka_core::util::format_ts;
 
 use crate::app::{App, Tab};
+use crate::form::{FormRow, RequestForm, TextInput};
 
 /// Returns true if color should be disabled.
 fn no_color() -> bool {
@@ -65,7 +66,7 @@ pub fn draw(f: &mut Frame, app: &App) {
         Tab::Logs => draw_logs_tab(f, app, chunks[1]),
     }
 
-    draw_status_bar(f, chunks[2]);
+    draw_status_bar(f, app, chunks[2]);
 
     // Overlay env popup if open
     if app.env_popup.is_some() {
@@ -129,13 +130,15 @@ fn draw_requests_tab(f: &mut Frame, app: &App, area: Rect) {
     }
     f.render_stateful_widget(list, chunks[0], &mut state);
 
-    // Right: response or request preview
-    if app.is_running {
+    // Right: form or response or request preview
+    if let Some(ref form) = app.request_form {
+        draw_request_form(f, form, chunks[1]);
+    } else if app.is_running {
         let text = Paragraph::new("Running request...")
             .block(Block::default().borders(Borders::ALL).title("Response"));
         f.render_widget(text, chunks[1]);
     } else if let Some(ref resp) = app.response {
-        draw_response_view(f, resp, chunks[1]);
+        draw_response_view(f, resp, chunks[1], app.detail_scroll, app.detail_focused);
     } else if let Some(ref req) = app.loaded_request {
         draw_request_preview(f, req, chunks[1]);
     } else {
@@ -197,7 +200,13 @@ fn draw_request_preview(f: &mut Frame, req: &senka_core::request::RequestDef, ar
     f.render_widget(text, area);
 }
 
-fn draw_response_view(f: &mut Frame, resp: &crate::app::ResponseView, area: Rect) {
+fn draw_response_view(
+    f: &mut Frame,
+    resp: &crate::app::ResponseView,
+    area: Rect,
+    scroll: u16,
+    focused: bool,
+) {
     let mut lines = Vec::new();
 
     if let Some(ref err) = resp.error {
@@ -233,8 +242,24 @@ fn draw_response_view(f: &mut Frame, resp: &crate::app::ResponseView, area: Rect
         }
     }
 
+    let title = if focused {
+        "Response (↑↓:scroll  Esc:back)"
+    } else {
+        "Response (→:focus)"
+    };
+    let border_style = if focused {
+        highlight_style()
+    } else {
+        Style::default()
+    };
     let text = Paragraph::new(lines)
-        .block(Block::default().borders(Borders::ALL).title("Response"))
+        .block(
+            Block::default()
+                .borders(Borders::ALL)
+                .title(title)
+                .border_style(border_style),
+        )
+        .scroll((scroll, 0))
         .wrap(Wrap { trim: false });
     f.render_widget(text, area);
 }
@@ -275,7 +300,7 @@ fn draw_logs_tab(f: &mut Frame, app: &App, area: Rect) {
 
     // Right: log detail
     if let Some(ref detail) = app.log_detail {
-        draw_log_detail(f, detail, chunks[1]);
+        draw_log_detail(f, detail, chunks[1], app.detail_scroll, app.detail_focused);
     } else {
         let text = Paragraph::new("Press Enter to view log details")
             .block(Block::default().borders(Borders::ALL).title("Detail"));
@@ -283,7 +308,13 @@ fn draw_logs_tab(f: &mut Frame, app: &App, area: Rect) {
     }
 }
 
-fn draw_log_detail(f: &mut Frame, detail: &senka_store::models::RunWithPayload, area: Rect) {
+fn draw_log_detail(
+    f: &mut Frame,
+    detail: &senka_store::models::RunWithPayload,
+    area: Rect,
+    scroll: u16,
+    focused: bool,
+) {
     let status_str = match detail.run.status {
         Some(s) => s.to_string(),
         None => "ERR".to_string(),
@@ -332,27 +363,258 @@ fn draw_log_detail(f: &mut Frame, detail: &senka_store::models::RunWithPayload, 
         }
     }
 
+    let title = if focused {
+        "Log Detail (↑↓:scroll  Esc:back)"
+    } else {
+        "Log Detail (→:focus)"
+    };
+    let border_style = if focused {
+        highlight_style()
+    } else {
+        Style::default()
+    };
     let text = Paragraph::new(lines)
-        .block(Block::default().borders(Borders::ALL).title("Log Detail"))
+        .block(
+            Block::default()
+                .borders(Borders::ALL)
+                .title(title)
+                .border_style(border_style),
+        )
+        .scroll((scroll, 0))
         .wrap(Wrap { trim: false });
     f.render_widget(text, area);
 }
 
-fn draw_status_bar(f: &mut Frame, area: Rect) {
-    let line = Line::from(vec![
-        Span::styled(" Tab", Style::default().add_modifier(Modifier::BOLD)),
-        Span::raw(":switch  "),
-        Span::styled("↑↓", Style::default().add_modifier(Modifier::BOLD)),
-        Span::raw(":nav  "),
-        Span::styled("Enter", Style::default().add_modifier(Modifier::BOLD)),
-        Span::raw(":run  "),
-        Span::styled("e", Style::default().add_modifier(Modifier::BOLD)),
-        Span::raw(":env  "),
-        Span::styled("Esc", Style::default().add_modifier(Modifier::BOLD)),
-        Span::raw(":clear  "),
-        Span::styled("q", Style::default().add_modifier(Modifier::BOLD)),
-        Span::raw(":quit"),
-    ]);
+fn draw_request_form(f: &mut Frame, form: &RequestForm, area: Rect) {
+    let block = Block::default()
+        .borders(Borders::ALL)
+        .title("New Request (Ctrl+S:save  Esc:cancel)");
+
+    let inner = block.inner(area);
+    f.render_widget(block, area);
+
+    let visible_height = inner.height as usize;
+
+    let mut lines: Vec<Line> = Vec::new();
+    for (i, row) in form.rows.iter().enumerate() {
+        let is_focused = i == form.focused_row;
+        lines.push(render_form_row(form, row, is_focused));
+    }
+
+    if let Some(ref err) = form.error_message {
+        lines.push(Line::from(""));
+        let err_style = if no_color() {
+            Style::default().add_modifier(Modifier::BOLD)
+        } else {
+            Style::default().fg(ratatui::style::Color::Red)
+        };
+        lines.push(Line::from(Span::styled(format!("Error: {err}"), err_style)));
+    }
+
+    // Compute scroll offset to keep focused row visible
+    let scroll = if form.focused_row >= visible_height {
+        (form.focused_row - visible_height + 1) as u16
+    } else {
+        0
+    };
+
+    let paragraph = Paragraph::new(lines).scroll((scroll, 0));
+    f.render_widget(paragraph, inner);
+}
+
+fn render_form_row<'a>(form: &RequestForm, row: &FormRow, focused: bool) -> Line<'a> {
+    let prefix = if focused { "> " } else { "  " };
+    let style = if focused {
+        highlight_style()
+    } else {
+        Style::default()
+    };
+    let dim_style = Style::default().add_modifier(Modifier::DIM);
+
+    match row {
+        FormRow::Name => {
+            let val = display_text_field(&form.name, focused && form.editing);
+            Line::from(Span::styled(format!("{prefix}Name:     {val}"), style))
+        }
+        FormRow::Method => {
+            let val = form.method.as_str();
+            Line::from(Span::styled(
+                format!("{prefix}Method:   < {val} >"),
+                style,
+            ))
+        }
+        FormRow::Url => {
+            let val = display_text_field(&form.url, focused && form.editing);
+            Line::from(Span::styled(format!("{prefix}URL:      {val}"), style))
+        }
+        FormRow::SectionLabel(label) => {
+            Line::from(Span::styled(format!("  --- {label} ---"), dim_style))
+        }
+        FormRow::HeaderKey(i) => {
+            let val = display_text_field(&form.headers[*i].key, focused && form.editing);
+            Line::from(Span::styled(format!("{prefix}  Key:    {val}"), style))
+        }
+        FormRow::HeaderValue(i) => {
+            let val = display_text_field(&form.headers[*i].value, focused && form.editing);
+            Line::from(Span::styled(format!("{prefix}  Value:  {val}"), style))
+        }
+        FormRow::AddHeader => {
+            Line::from(Span::styled(format!("{prefix}  [+ Add Header]"), style))
+        }
+        FormRow::QueryKey(i) => {
+            let val = display_text_field(&form.query[*i].key, focused && form.editing);
+            Line::from(Span::styled(format!("{prefix}  Key:    {val}"), style))
+        }
+        FormRow::QueryValue(i) => {
+            let val = display_text_field(&form.query[*i].value, focused && form.editing);
+            Line::from(Span::styled(format!("{prefix}  Value:  {val}"), style))
+        }
+        FormRow::AddQuery => {
+            Line::from(Span::styled(format!("{prefix}  [+ Add Param]"), style))
+        }
+        FormRow::AuthType => {
+            let val = form.auth_type.label();
+            Line::from(Span::styled(
+                format!("{prefix}Auth:     < {val} >"),
+                style,
+            ))
+        }
+        FormRow::AuthBearerToken => {
+            let val = display_text_field(&form.auth_bearer_token, focused && form.editing);
+            Line::from(Span::styled(format!("{prefix}  Token:  {val}"), style))
+        }
+        FormRow::AuthBasicUsername => {
+            let val = display_text_field(&form.auth_basic_username, focused && form.editing);
+            Line::from(Span::styled(format!("{prefix}  User:   {val}"), style))
+        }
+        FormRow::AuthBasicPassword => {
+            let val = display_text_field(&form.auth_basic_password, focused && form.editing);
+            Line::from(Span::styled(format!("{prefix}  Pass:   {val}"), style))
+        }
+        FormRow::BodyType => {
+            let val = form.body_type.label();
+            Line::from(Span::styled(
+                format!("{prefix}Body:     < {val} >"),
+                style,
+            ))
+        }
+        FormRow::BodyRawContent => {
+            let val = display_text_field(&form.body_raw, focused && form.editing);
+            Line::from(Span::styled(format!("{prefix}  Content: {val}"), style))
+        }
+        FormRow::BodyJsonContent => {
+            let val = display_text_field(&form.body_json, focused && form.editing);
+            Line::from(Span::styled(format!("{prefix}  JSON:    {val}"), style))
+        }
+        FormRow::BodyFormKey(i) => {
+            let val = display_text_field(&form.body_form[*i].key, focused && form.editing);
+            Line::from(Span::styled(format!("{prefix}  Key:    {val}"), style))
+        }
+        FormRow::BodyFormValue(i) => {
+            let val = display_text_field(&form.body_form[*i].value, focused && form.editing);
+            Line::from(Span::styled(format!("{prefix}  Value:  {val}"), style))
+        }
+        FormRow::AddBodyFormPair => {
+            Line::from(Span::styled(format!("{prefix}  [+ Add Field]"), style))
+        }
+        FormRow::Spacer => Line::from(""),
+        FormRow::Save => Line::from(Span::styled(
+            format!("{prefix}[Save Request]"),
+            style,
+        )),
+    }
+}
+
+fn display_text_field(input: &TextInput, editing: bool) -> String {
+    if editing {
+        let (before, after) = input.value.split_at(input.cursor);
+        format!("{before}|{after}")
+    } else if input.value.is_empty() {
+        "(empty)".to_string()
+    } else {
+        input.value.clone()
+    }
+}
+
+fn draw_status_bar(f: &mut Frame, app: &App, area: Rect) {
+    let bold = Style::default().add_modifier(Modifier::BOLD);
+
+    let line = if let Some(ref form) = app.request_form {
+        if form.editing {
+            Line::from(vec![
+                Span::styled(" Esc/Enter", bold),
+                Span::raw(":stop editing  "),
+                Span::styled("Ctrl+S", bold),
+                Span::raw(":save"),
+            ])
+        } else {
+            Line::from(vec![
+                Span::styled(" \u{2191}\u{2193}", bold),
+                Span::raw(":nav  "),
+                Span::styled("Enter", bold),
+                Span::raw(":edit  "),
+                Span::styled("\u{2190}\u{2192}", bold),
+                Span::raw(":cycle  "),
+                Span::styled("Ctrl+D", bold),
+                Span::raw(":delete  "),
+                Span::styled("Ctrl+S", bold),
+                Span::raw(":save  "),
+                Span::styled("Esc", bold),
+                Span::raw(":cancel"),
+            ])
+        }
+    } else if app.detail_focused {
+        Line::from(vec![
+            Span::styled(" \u{2191}\u{2193}", bold),
+            Span::raw(":scroll  "),
+            Span::styled("PgUp/PgDn", bold),
+            Span::raw(":page  "),
+            Span::styled("Home", bold),
+            Span::raw(":top  "),
+            Span::styled("Esc/\u{2190}", bold),
+            Span::raw(":back  "),
+            Span::styled("q", bold),
+            Span::raw(":quit"),
+        ])
+    } else if app.current_tab == Tab::Logs {
+        Line::from(vec![
+            Span::styled(" Tab", bold),
+            Span::raw(":switch  "),
+            Span::styled("\u{2191}\u{2193}", bold),
+            Span::raw(":nav  "),
+            Span::styled("Enter", bold),
+            Span::raw(":view  "),
+            Span::styled("\u{2192}", bold),
+            Span::raw(":detail  "),
+            Span::styled("d", bold),
+            Span::raw(":delete  "),
+            Span::styled("Ctrl+D", bold),
+            Span::raw(":clear all  "),
+            Span::styled("e", bold),
+            Span::raw(":env  "),
+            Span::styled("q", bold),
+            Span::raw(":quit"),
+        ])
+    } else {
+        Line::from(vec![
+            Span::styled(" Tab", bold),
+            Span::raw(":switch  "),
+            Span::styled("\u{2191}\u{2193}", bold),
+            Span::raw(":nav  "),
+            Span::styled("Enter", bold),
+            Span::raw(":run  "),
+            Span::styled("\u{2192}", bold),
+            Span::raw(":detail  "),
+            Span::styled("n", bold),
+            Span::raw(":new  "),
+            Span::styled("e", bold),
+            Span::raw(":env  "),
+            Span::styled("Esc", bold),
+            Span::raw(":clear  "),
+            Span::styled("q", bold),
+            Span::raw(":quit"),
+        ])
+    };
     f.render_widget(Paragraph::new(line), area);
 }
 

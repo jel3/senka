@@ -21,6 +21,7 @@ serde_yaml = { workspace = true }
 anyhow = { workspace = true }
 rpassword = { workspace = true }
 ulid = { workspace = true }
+rand = { workspace = true }
 
 [features]
 default = []
