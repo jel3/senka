@@ -1,10 +1,10 @@
-use std::cell::Cell;
+use std::cell::{Cell, RefCell};
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::time::Instant;
 
 use anyhow::Context;
-use crossterm::event::{Event, KeyCode, KeyModifiers};
+use crossterm::event::{Event, KeyCode, KeyModifiers, MouseButton, MouseEventKind};
 use tokio::sync::mpsc;
 
 use senka_core::config::ProjectConfig;
@@ -68,11 +68,18 @@ pub struct App {
     pub detail_focused: bool,
     pub detail_scroll: u16,
     pub select_mode: bool,
-    pub select_anchor: usize,
-    pub select_cursor: usize,
+    pub select_anchor: (usize, usize), // (line, col)
+    pub select_cursor: (usize, usize), // (line, col)
     pub detail_line_count: Cell<usize>,
     pub detail_viewport_height: Cell<usize>,
     pub status_message: Option<(String, Instant)>,
+
+    // Mouse selection state
+    pub mouse_selecting: bool,
+    /// Inner rect of the detail panel: (x, y, width, height). Set during draw.
+    pub detail_inner_rect: Cell<(u16, u16, u16, u16)>,
+    /// Cumulative wrapped-line offsets per logical line. Set during draw.
+    pub detail_row_offsets: RefCell<Vec<u16>>,
 
     // Env
     pub active_env: Option<String>,
@@ -131,11 +138,14 @@ impl App {
             detail_focused: false,
             detail_scroll: 0,
             select_mode: false,
-            select_anchor: 0,
-            select_cursor: 0,
+            select_anchor: (0, 0),
+            select_cursor: (0, 0),
             detail_line_count: Cell::new(0),
             detail_viewport_height: Cell::new(20),
             status_message: None,
+            mouse_selecting: false,
+            detail_inner_rect: Cell::new((0, 0, 0, 0)),
+            detail_row_offsets: RefCell::new(Vec::new()),
             tx,
             rx,
         })
@@ -150,6 +160,10 @@ impl App {
     }
 
     pub fn handle_event(&mut self, ev: Event) -> bool {
+        if let Event::Mouse(mouse) = ev {
+            return self.handle_mouse(mouse);
+        }
+
         if let Event::Key(key) = ev {
             // Only process key-press events; ignore key-release and repeat
             // (on Windows, crossterm reports both Press and Release)
@@ -366,34 +380,39 @@ impl App {
 
     fn handle_select_mode_key(&mut self, code: KeyCode, modifiers: KeyModifiers) -> bool {
         let line_count = self.detail_line_count.get();
+        let lines = self.current_detail_lines();
+        // Keyboard selection moves by whole lines: col = line length for cursor
+        let line_len = |l: usize| -> usize { lines.get(l).map_or(0, |s| s.len()) };
         match code {
             KeyCode::Up | KeyCode::Char('k') => {
-                self.select_cursor = self.select_cursor.saturating_sub(1);
+                let new_line = self.select_cursor.0.saturating_sub(1);
+                self.select_cursor = (new_line, line_len(new_line));
                 self.scroll_to_cursor();
             }
             KeyCode::Down | KeyCode::Char('j') => {
-                if self.select_cursor < line_count.saturating_sub(1) {
-                    self.select_cursor += 1;
-                }
+                let new_line = (self.select_cursor.0 + 1).min(line_count.saturating_sub(1));
+                self.select_cursor = (new_line, line_len(new_line));
                 self.scroll_to_cursor();
             }
             KeyCode::PageUp => {
                 let page = self.detail_viewport_height.get().max(1);
-                self.select_cursor = self.select_cursor.saturating_sub(page);
+                let new_line = self.select_cursor.0.saturating_sub(page);
+                self.select_cursor = (new_line, line_len(new_line));
                 self.scroll_to_cursor();
             }
             KeyCode::PageDown => {
                 let page = self.detail_viewport_height.get().max(1);
-                self.select_cursor =
-                    (self.select_cursor + page).min(line_count.saturating_sub(1));
+                let new_line = (self.select_cursor.0 + page).min(line_count.saturating_sub(1));
+                self.select_cursor = (new_line, line_len(new_line));
                 self.scroll_to_cursor();
             }
             KeyCode::Home => {
-                self.select_cursor = 0;
+                self.select_cursor = (0, 0);
                 self.scroll_to_cursor();
             }
             KeyCode::End => {
-                self.select_cursor = line_count.saturating_sub(1);
+                let last = line_count.saturating_sub(1);
+                self.select_cursor = (last, line_len(last));
                 self.scroll_to_cursor();
             }
             KeyCode::Char('y') | KeyCode::Enter => {
@@ -420,27 +439,186 @@ impl App {
         }
         self.detail_line_count.set(lines.len());
         self.select_mode = true;
-        let start = (self.detail_scroll as usize).min(lines.len().saturating_sub(1));
-        self.select_anchor = start;
-        self.select_cursor = start;
+        let start_line = (self.detail_scroll as usize).min(lines.len().saturating_sub(1));
+        self.select_anchor = (start_line, 0);
+        self.select_cursor = (start_line, 0);
     }
 
     fn scroll_to_cursor(&mut self) {
-        let cursor = self.select_cursor as u16;
-        if cursor < self.detail_scroll {
-            self.detail_scroll = cursor;
+        let cursor_line = self.select_cursor.0 as u16;
+        if cursor_line < self.detail_scroll {
+            self.detail_scroll = cursor_line;
         }
         let viewport = self.detail_viewport_height.get() as u16;
-        if viewport > 0 && cursor >= self.detail_scroll + viewport {
-            self.detail_scroll = cursor - viewport + 1;
+        if viewport > 0 && cursor_line >= self.detail_scroll + viewport {
+            self.detail_scroll = cursor_line - viewport + 1;
         }
+    }
+
+    // -----------------------------------------------------------------------
+    // Mouse handling
+    // -----------------------------------------------------------------------
+
+    fn handle_mouse(&mut self, mouse: crossterm::event::MouseEvent) -> bool {
+        match mouse.kind {
+            MouseEventKind::Down(MouseButton::Left) => {
+                if let Some(pos) = self.mouse_to_position(mouse.column, mouse.row) {
+                    self.detail_focused = true;
+                    self.select_mode = true;
+                    self.mouse_selecting = true;
+                    self.select_anchor = pos;
+                    self.select_cursor = pos;
+                    return true;
+                }
+                // Click outside detail panel — cancel any mouse selection
+                self.mouse_selecting = false;
+                self.select_mode = false;
+                false
+            }
+            MouseEventKind::Drag(MouseButton::Left) => {
+                if !self.mouse_selecting {
+                    return false;
+                }
+                let (ix, iy, _iw, ih) = self.detail_inner_rect.get();
+                // Clamp mouse position to detail panel bounds
+                let clamped_col = mouse.column.max(ix);
+                let clamped_row = mouse.row.max(iy).min(iy + ih.saturating_sub(1));
+                if let Some(pos) = self.mouse_to_position(clamped_col, clamped_row) {
+                    let line_count = self.detail_line_count.get();
+                    self.select_cursor = (pos.0.min(line_count.saturating_sub(1)), pos.1);
+                    self.scroll_to_cursor();
+                    return true;
+                }
+                // Mouse outside panel bounds vertically — auto-scroll
+                if mouse.row < iy {
+                    self.detail_scroll = self.detail_scroll.saturating_sub(1);
+                    if let Some(pos) = self.mouse_to_position(clamped_col, iy) {
+                        self.select_cursor = pos;
+                    }
+                } else if mouse.row >= iy + ih {
+                    self.detail_scroll = self.detail_scroll.saturating_add(1);
+                    if let Some(pos) = self.mouse_to_position(clamped_col, iy + ih.saturating_sub(1)) {
+                        let line_count = self.detail_line_count.get();
+                        self.select_cursor = (pos.0.min(line_count.saturating_sub(1)), pos.1);
+                    }
+                }
+                true
+            }
+            MouseEventKind::Up(MouseButton::Left) => {
+                if !self.mouse_selecting {
+                    return false;
+                }
+                self.mouse_selecting = false;
+                if self.select_anchor != self.select_cursor {
+                    self.copy_selection();
+                } else {
+                    self.select_mode = false;
+                }
+                true
+            }
+            MouseEventKind::ScrollUp => {
+                if self.is_mouse_over_detail(mouse.column, mouse.row) && self.has_detail_content() {
+                    self.detail_scroll = self.detail_scroll.saturating_sub(3);
+                    return true;
+                }
+                false
+            }
+            MouseEventKind::ScrollDown => {
+                if self.is_mouse_over_detail(mouse.column, mouse.row) && self.has_detail_content() {
+                    self.detail_scroll = self.detail_scroll.saturating_add(3);
+                    return true;
+                }
+                false
+            }
+            _ => false,
+        }
+    }
+
+    /// Convert terminal (col, row) to a logical (line, char_offset), or None if outside the detail panel.
+    fn mouse_to_position(&self, col: u16, row: u16) -> Option<(usize, usize)> {
+        let (ix, iy, iw, ih) = self.detail_inner_rect.get();
+        if iw == 0 || ih == 0 {
+            return None;
+        }
+        if row < iy || row >= iy + ih {
+            return None;
+        }
+        let display_row = row - iy;
+        let wrapped_line = self.detail_scroll as usize + display_row as usize;
+
+        let offsets = self.detail_row_offsets.borrow();
+        if offsets.is_empty() {
+            return None;
+        }
+        // Binary search: find last offset <= wrapped_line
+        let idx = offsets.partition_point(|&off| (off as usize) <= wrapped_line);
+        let logical_line = idx.saturating_sub(1);
+
+        // Compute character offset within the logical line
+        let inner_col = col.saturating_sub(ix) as usize;
+        let line_start_row = offsets[logical_line] as usize;
+        let wrapped_row_of_line = wrapped_line.saturating_sub(line_start_row);
+        let char_offset = wrapped_row_of_line * (iw as usize) + inner_col;
+
+        // Clamp to actual line length
+        let lines = self.current_detail_lines();
+        let max_col = lines.get(logical_line).map_or(0, |l| l.len());
+        Some((logical_line, char_offset.min(max_col)))
+    }
+
+    /// Check if the mouse position is within the detail panel area.
+    fn is_mouse_over_detail(&self, col: u16, row: u16) -> bool {
+        let (ix, iy, iw, ih) = self.detail_inner_rect.get();
+        if iw == 0 || ih == 0 {
+            return false;
+        }
+        col >= ix && col < ix + iw && row >= iy && row < iy + ih
     }
 
     fn copy_selection(&mut self) {
         let lines = self.current_detail_lines();
-        let start = self.select_anchor.min(self.select_cursor);
-        let end = (self.select_anchor.max(self.select_cursor)).min(lines.len().saturating_sub(1));
-        let text: String = lines[start..=end].join("\n");
+        if lines.is_empty() {
+            self.select_mode = false;
+            return;
+        }
+
+        // Normalize so start <= end
+        let (start, end) = if self.select_anchor <= self.select_cursor {
+            (self.select_anchor, self.select_cursor)
+        } else {
+            (self.select_cursor, self.select_anchor)
+        };
+
+        let (start_line, start_col) = start;
+        let (end_line, end_col) = end;
+        let last_line = lines.len().saturating_sub(1);
+
+        let text = if start_line == end_line {
+            // Single line selection
+            let line = &lines[start_line.min(last_line)];
+            let sc = start_col.min(line.len());
+            let ec = end_col.min(line.len());
+            line[sc..ec].to_string()
+        } else {
+            // Multi-line selection
+            let mut parts = Vec::new();
+            // First line: from start_col to end
+            let first = &lines[start_line.min(last_line)];
+            let sc = start_col.min(first.len());
+            parts.push(&first[sc..]);
+            // Middle lines: full
+            for line in lines.iter().take(end_line.min(lines.len())).skip(start_line + 1) {
+                parts.push(line.as_str());
+            }
+            // Last line: from start to end_col
+            if end_line <= last_line {
+                let last = &lines[end_line];
+                let ec = end_col.min(last.len());
+                parts.push(&last[..ec]);
+            }
+            parts.join("\n")
+        };
+
         self.copy_to_clipboard(&text);
         self.select_mode = false;
     }

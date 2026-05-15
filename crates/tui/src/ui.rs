@@ -67,6 +67,9 @@ fn status_style(status: Option<u16>) -> Style {
 }
 
 pub fn draw(f: &mut Frame, app: &App) {
+    // Reset detail panel rect; detail draw functions will set it if applicable
+    app.detail_inner_rect.set((0, 0, 0, 0));
+
     let chunks = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
@@ -274,26 +277,12 @@ fn draw_response_view(f: &mut Frame, app: &crate::app::App, area: Rect) {
     let inner = block.inner(area);
     app.detail_line_count.set(lines.len());
     app.detail_viewport_height.set(inner.height as usize);
+    app.detail_inner_rect.set((inner.x, inner.y, inner.width, inner.height));
+    store_row_offsets(app, &lines, inner.width);
 
     // Apply selection highlighting
     if app.select_mode {
-        let sel_start = app.select_anchor.min(app.select_cursor);
-        let sel_end = app.select_anchor.max(app.select_cursor);
-        for (i, line) in lines.iter_mut().enumerate() {
-            if i >= sel_start && i <= sel_end {
-                let new_spans: Vec<Span> = line
-                    .spans
-                    .drain(..)
-                    .map(|span| {
-                        Span::styled(
-                            span.content.to_string(),
-                            span.style.patch(select_highlight_style()),
-                        )
-                    })
-                    .collect();
-                *line = Line::from(new_spans);
-            }
-        }
+        apply_char_selection(&mut lines, app.select_anchor, app.select_cursor);
     }
 
     let text = Paragraph::new(lines)
@@ -417,26 +406,12 @@ fn draw_log_detail(f: &mut Frame, app: &crate::app::App, area: Rect) {
     let inner = block.inner(area);
     app.detail_line_count.set(lines.len());
     app.detail_viewport_height.set(inner.height as usize);
+    app.detail_inner_rect.set((inner.x, inner.y, inner.width, inner.height));
+    store_row_offsets(app, &lines, inner.width);
 
     // Apply selection highlighting
     if app.select_mode {
-        let sel_start = app.select_anchor.min(app.select_cursor);
-        let sel_end = app.select_anchor.max(app.select_cursor);
-        for (i, line) in lines.iter_mut().enumerate() {
-            if i >= sel_start && i <= sel_end {
-                let new_spans: Vec<Span> = line
-                    .spans
-                    .drain(..)
-                    .map(|span| {
-                        Span::styled(
-                            span.content.to_string(),
-                            span.style.patch(select_highlight_style()),
-                        )
-                    })
-                    .collect();
-                *line = Line::from(new_spans);
-            }
-        }
+        apply_char_selection(&mut lines, app.select_anchor, app.select_cursor);
     }
 
     let text = Paragraph::new(lines)
@@ -764,6 +739,112 @@ fn draw_env_popup(f: &mut Frame, app: &App) {
     let mut state = ListState::default();
     state.select(Some(popup.selected));
     f.render_stateful_widget(list, area, &mut state);
+}
+
+/// Apply character-level selection highlighting to a set of lines.
+/// `anchor` and `cursor` are `(line, col)` positions.
+fn apply_char_selection(lines: &mut [Line], anchor: (usize, usize), cursor: (usize, usize)) {
+    let (start, end) = if anchor <= cursor {
+        (anchor, cursor)
+    } else {
+        (cursor, anchor)
+    };
+    let (start_line, start_col) = start;
+    let (end_line, end_col) = end;
+
+    for i in start_line..=end_line.min(lines.len().saturating_sub(1)) {
+        if i >= lines.len() {
+            break;
+        }
+        let (from, to) = if start_line == end_line {
+            // Single-line selection
+            (start_col, end_col)
+        } else if i == start_line {
+            // First line: from start_col to end
+            let line_len: usize = lines[i].spans.iter().map(|s| s.content.len()).sum();
+            (start_col, line_len)
+        } else if i == end_line {
+            // Last line: from 0 to end_col
+            (0, end_col)
+        } else {
+            // Middle lines: highlight entire line
+            let line_len: usize = lines[i].spans.iter().map(|s| s.content.len()).sum();
+            (0, line_len)
+        };
+
+        if from < to {
+            highlight_line_range(&mut lines[i], from, to);
+        }
+    }
+}
+
+/// Highlight characters `[from_col..to_col)` within a `Line` by splitting spans
+/// and applying the selection highlight style.
+fn highlight_line_range(line: &mut Line, from_col: usize, to_col: usize) {
+    let hl = select_highlight_style();
+    let mut new_spans: Vec<Span> = Vec::new();
+    let mut pos: usize = 0;
+
+    for span in line.spans.drain(..) {
+        let span_len = span.content.len();
+        let span_start = pos;
+        let span_end = pos + span_len;
+        pos = span_end;
+
+        if span_end <= from_col || span_start >= to_col {
+            // Entirely outside selection
+            new_spans.push(span);
+        } else if span_start >= from_col && span_end <= to_col {
+            // Entirely inside selection
+            new_spans.push(Span::styled(
+                span.content.to_string(),
+                span.style.patch(hl),
+            ));
+        } else {
+            // Partially overlapping — split the span
+            let content = span.content.to_string();
+            let rel_from = from_col.saturating_sub(span_start);
+            let rel_to = to_col.saturating_sub(span_start).min(span_len);
+
+            if rel_from > 0 {
+                new_spans.push(Span::styled(
+                    content[..rel_from].to_string(),
+                    span.style,
+                ));
+            }
+            new_spans.push(Span::styled(
+                content[rel_from..rel_to].to_string(),
+                span.style.patch(hl),
+            ));
+            if rel_to < span_len {
+                new_spans.push(Span::styled(
+                    content[rel_to..].to_string(),
+                    span.style,
+                ));
+            }
+        }
+    }
+
+    *line = Line::from(new_spans);
+}
+
+/// Compute cumulative wrapped-line offsets and store them in the app.
+/// `offsets[i]` = the first wrapped display row of logical line `i`.
+fn store_row_offsets(app: &App, lines: &[Line], viewport_width: u16) {
+    let w = viewport_width.max(1) as usize;
+    let mut offsets = Vec::with_capacity(lines.len());
+    let mut cumulative: u16 = 0;
+    for line in lines {
+        offsets.push(cumulative);
+        let line_width = line.width();
+        let rows = if line_width == 0 {
+            1
+        } else {
+            line_width.div_ceil(w) as u16
+        };
+        cumulative = cumulative.saturating_add(rows);
+    }
+    *app.detail_row_offsets.borrow_mut() = offsets;
 }
 
 /// Create a centered rectangle with given percentage width/height.
