@@ -268,6 +268,37 @@ senka env set-secret api_key --env dev
 url: "{{base_url}}/data?key={{api_key}}"
 ```
 
+## Shell Completions
+
+Senka supports tab completion for subcommands, flags, request names, and environment names.
+
+Generate and install the completion script for your shell (one-time setup):
+
+```bash
+# Bash
+senka completions bash >> ~/.bashrc && source ~/.bashrc
+
+# Zsh
+senka completions zsh >> ~/.zshrc && source ~/.zshrc
+
+# Fish
+senka completions fish > ~/.config/fish/completions/senka.fish
+
+# PowerShell
+senka completions powershell >> $PROFILE
+```
+
+After sourcing, tab completion is available immediately in new sessions:
+
+```bash
+senka <TAB>               # subcommands
+senka run <TAB>           # request names from senka-requests/
+senka run --env <TAB>     # environment names from senka-env/
+senka log <TAB>           # log subcommands
+```
+
+Request and environment names are resolved dynamically from the current project — no re-installation needed when you add new files.
+
 ## Exit Codes
 
 | Code | Meaning |
