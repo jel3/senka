@@ -33,7 +33,7 @@ clap = { version = "4", features = ["derive"] }
 rusqlite = { version = "0.31", features = ["bundled"] }
 
 # Secrets
-keyring = "3"
+keyring = "2"
 
 # TUI
 ratatui = "0.29"

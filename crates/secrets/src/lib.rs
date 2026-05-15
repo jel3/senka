@@ -13,7 +13,7 @@ pub fn get(project_id: &str, env_name: &str, key: &str) -> Result<Option<String>
     match entry.get_password() {
         Ok(val) => Ok(Some(val)),
         Err(keyring::Error::NoEntry) => Ok(None),
-        Err(e) => Err(e.into()),
+        Err(e) => Err(SecretsError::Keyring(e)),
     }
 }
 
@@ -29,6 +29,6 @@ pub fn set(project_id: &str, env_name: &str, key: &str, value: &str) -> Result<(
 pub fn delete(project_id: &str, env_name: &str, key: &str) -> Result<(), SecretsError> {
     let service = format!("senka.{project_id}.{env_name}");
     let entry = keyring::Entry::new(&service, key)?;
-    entry.delete_credential()?;
+    entry.delete_password()?;
     Ok(())
 }
