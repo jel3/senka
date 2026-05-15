@@ -1,7 +1,7 @@
 mod commands;
 mod output;
 
-use clap::Parser;
+use clap::{CommandFactory, Parser};
 use rand::Rng;
 
 #[derive(Parser)]
@@ -13,6 +13,9 @@ struct Cli {
 
 #[tokio::main]
 async fn main() {
+    // Handle shell completion requests before anything else.
+    clap_complete::CompleteEnv::with_factory(Cli::command).complete();
+
     let cli = Cli::parse();
 
     let command = match cli.command {

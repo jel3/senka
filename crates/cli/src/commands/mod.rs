@@ -3,8 +3,10 @@ mod init;
 mod log;
 mod req;
 mod run;
+pub mod complete;
 
 use clap::Subcommand;
+use clap_complete::engine::ArgValueCompleter;
 
 #[derive(Subcommand)]
 pub enum Command {
@@ -27,10 +29,11 @@ pub enum Command {
     /// Execute a request.
     Run {
         /// Request name to execute.
+        #[arg(add = ArgValueCompleter::new(complete::complete_request_names))]
         request: String,
 
         /// Environment to use.
-        #[arg(long)]
+        #[arg(long, add = ArgValueCompleter::new(complete::complete_env_names))]
         env: Option<String>,
 
         /// Variable overrides (key=value).
@@ -60,6 +63,12 @@ pub enum Command {
         /// Disable color output.
         #[arg(long)]
         no_color: bool,
+    },
+
+    /// Generate shell completion scripts (pipe output to your shell's config).
+    Completions {
+        /// Shell to generate completions for.
+        shell: clap_complete::Shell,
     },
 
     /// Launch the interactive TUI.
@@ -186,6 +195,13 @@ pub async fn dispatch(cmd: Command) -> anyhow::Result<()> {
                 no_color,
             })
             .await
+        }
+        Command::Completions { shell } => {
+            use clap::CommandFactory;
+            use clap_complete::generate;
+            let mut cmd = crate::Cli::command();
+            generate(shell, &mut cmd, "senka", &mut std::io::stdout());
+            Ok(())
         }
         #[cfg(feature = "tui")]
         Command::Tui => senka_tui::run().await,
