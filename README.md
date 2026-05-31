@@ -185,6 +185,23 @@ Create a new request file at `senka-requests/<name>.yml` with a starter template
 
 List all available environments.
 
+### `senka env use <name>`
+
+Set the default environment in `senka.yml`.
+
+```bash
+senka env use staging
+```
+
+### `senka env set KEY=VALUE [--env <name>]`
+
+Set a plaintext variable in an environment file (`senka-env/<name>.yml`). Creates the file if it doesn't exist.
+
+```bash
+senka env set base_url=http://localhost:3000
+senka env set base_url=https://api.example.com --env prod
+```
+
 ### `senka env set-secret <key> [--env <name>]`
 
 Store a secret in the OS keychain (prompted securely, never written to disk). The secret is available as `{{key}}` in request templates when the matching env is active.
@@ -217,6 +234,24 @@ Show full detail for a log entry including request/response headers and body.
 ### `senka log prune [--keep <duration>]`
 
 Delete log entries older than the given duration (default: `30d`).
+
+### `senka log clear`
+
+Delete all log entries.
+
+### `senka log delete [<id>] [filters]`
+
+Delete a single log entry by ID, or delete entries matching filters.
+
+```
+Options:
+  <id>             Delete a single entry by ID
+  --since <dur>    Delete entries from the last duration (e.g. 1h, 7d)
+  --status <code>  Delete entries matching this HTTP status
+  --req <name>     Delete entries matching this request name (substring)
+```
+
+At least one of `id` or a filter flag must be provided.
 
 ### `senka log export`
 
