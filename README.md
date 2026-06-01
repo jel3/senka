@@ -1,5 +1,7 @@
 # senka
 
+[![CI](https://github.com/jel3/senka/actions/workflows/ci.yml/badge.svg)](https://github.com/jel3/senka/actions/workflows/ci.yml)
+
 A CLI-first HTTP execution and inspection tool. Define requests as YAML files, run them with environment variables and secrets, and browse results in a terminal UI. Local-first — no telemetry, no cloud dependency.
 
 ## Installation

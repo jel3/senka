@@ -12,7 +12,12 @@ resolver = "2"
 [workspace.package]
 version = "0.1.0"
 edition = "2021"
-license = "MIT"
+license = "MIT OR Apache-2.0"
+description = "CLI-first HTTP execution and inspection engine with environment/secret management and SQLite logging"
+repository = "https://github.com/jel3/senka"
+homepage = "https://github.com/jel3/senka"
+keywords = ["http", "cli", "rest", "api", "tui"]
+categories = ["command-line-utilities", "web-programming::http-client"]
 
 [workspace.dependencies]
 # Serialization
