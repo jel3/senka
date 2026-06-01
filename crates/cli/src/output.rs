@@ -34,7 +34,12 @@ pub fn print_response(
     opts: &OutputOptions,
 ) {
     let should_redact = !opts.no_redact;
-    let headers = redact_headers(&resp.headers, redaction, opts.no_redact, &opts.secret_values);
+    let headers = redact_headers(
+        &resp.headers,
+        redaction,
+        opts.no_redact,
+        &opts.secret_values,
+    );
     let body_str = String::from_utf8_lossy(&resp.body);
 
     // Apply secret value redaction to the body text
@@ -48,7 +53,9 @@ pub fn print_response(
     let body_str = if should_redact && !redaction.json_fields.is_empty() {
         if let Ok(mut json_val) = serde_json::from_str::<serde_json::Value>(&body_str) {
             redact::redact_json_fields(&mut json_val, redaction);
-            std::borrow::Cow::Owned(serde_json::to_string_pretty(&json_val).unwrap_or_else(|_| body_str.into_owned()))
+            std::borrow::Cow::Owned(
+                serde_json::to_string_pretty(&json_val).unwrap_or_else(|_| body_str.into_owned()),
+            )
         } else {
             body_str
         }

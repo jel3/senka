@@ -303,9 +303,8 @@ pub fn export_jsonl<W: Write>(conn: &Connection, writer: &mut W) -> Result<usize
     let mut count = 0;
     for row in rows {
         let rwp = row.map_err(StoreError::Db)?;
-        let line = serde_json::to_string(&rwp).map_err(|e| {
-            StoreError::Io(std::io::Error::other(e))
-        })?;
+        let line =
+            serde_json::to_string(&rwp).map_err(|e| StoreError::Io(std::io::Error::other(e)))?;
         writeln!(writer, "{line}")?;
         count += 1;
     }
@@ -419,9 +418,24 @@ mod tests {
     #[test]
     fn filter_by_status() {
         let conn = open_in_memory().unwrap();
-        insert_run(&conn, &make_run("r1", 1000, "a", Some(200)), &make_payload("r1")).unwrap();
-        insert_run(&conn, &make_run("r2", 1001, "b", Some(404)), &make_payload("r2")).unwrap();
-        insert_run(&conn, &make_run("r3", 1002, "c", Some(200)), &make_payload("r3")).unwrap();
+        insert_run(
+            &conn,
+            &make_run("r1", 1000, "a", Some(200)),
+            &make_payload("r1"),
+        )
+        .unwrap();
+        insert_run(
+            &conn,
+            &make_run("r2", 1001, "b", Some(404)),
+            &make_payload("r2"),
+        )
+        .unwrap();
+        insert_run(
+            &conn,
+            &make_run("r3", 1002, "c", Some(200)),
+            &make_payload("r3"),
+        )
+        .unwrap();
 
         let filters = ListFilters {
             since: None,
@@ -436,9 +450,24 @@ mod tests {
     #[test]
     fn filter_by_since() {
         let conn = open_in_memory().unwrap();
-        insert_run(&conn, &make_run("r1", 1000, "a", Some(200)), &make_payload("r1")).unwrap();
-        insert_run(&conn, &make_run("r2", 2000, "b", Some(200)), &make_payload("r2")).unwrap();
-        insert_run(&conn, &make_run("r3", 3000, "c", Some(200)), &make_payload("r3")).unwrap();
+        insert_run(
+            &conn,
+            &make_run("r1", 1000, "a", Some(200)),
+            &make_payload("r1"),
+        )
+        .unwrap();
+        insert_run(
+            &conn,
+            &make_run("r2", 2000, "b", Some(200)),
+            &make_payload("r2"),
+        )
+        .unwrap();
+        insert_run(
+            &conn,
+            &make_run("r3", 3000, "c", Some(200)),
+            &make_payload("r3"),
+        )
+        .unwrap();
 
         let filters = ListFilters {
             since: Some(2000),
@@ -454,9 +483,24 @@ mod tests {
     #[test]
     fn filter_by_request_name() {
         let conn = open_in_memory().unwrap();
-        insert_run(&conn, &make_run("r1", 1000, "users.get", Some(200)), &make_payload("r1")).unwrap();
-        insert_run(&conn, &make_run("r2", 1001, "users.create", Some(201)), &make_payload("r2")).unwrap();
-        insert_run(&conn, &make_run("r3", 1002, "orders.list", Some(200)), &make_payload("r3")).unwrap();
+        insert_run(
+            &conn,
+            &make_run("r1", 1000, "users.get", Some(200)),
+            &make_payload("r1"),
+        )
+        .unwrap();
+        insert_run(
+            &conn,
+            &make_run("r2", 1001, "users.create", Some(201)),
+            &make_payload("r2"),
+        )
+        .unwrap();
+        insert_run(
+            &conn,
+            &make_run("r3", 1002, "orders.list", Some(200)),
+            &make_payload("r3"),
+        )
+        .unwrap();
 
         let filters = ListFilters {
             since: None,
@@ -490,9 +534,24 @@ mod tests {
     #[test]
     fn prune_cascade() {
         let conn = open_in_memory().unwrap();
-        insert_run(&conn, &make_run("r1", 1000, "a", Some(200)), &make_payload("r1")).unwrap();
-        insert_run(&conn, &make_run("r2", 2000, "b", Some(200)), &make_payload("r2")).unwrap();
-        insert_run(&conn, &make_run("r3", 3000, "c", Some(200)), &make_payload("r3")).unwrap();
+        insert_run(
+            &conn,
+            &make_run("r1", 1000, "a", Some(200)),
+            &make_payload("r1"),
+        )
+        .unwrap();
+        insert_run(
+            &conn,
+            &make_run("r2", 2000, "b", Some(200)),
+            &make_payload("r2"),
+        )
+        .unwrap();
+        insert_run(
+            &conn,
+            &make_run("r3", 3000, "c", Some(200)),
+            &make_payload("r3"),
+        )
+        .unwrap();
 
         let deleted = prune(&conn, 2500).unwrap();
         assert_eq!(deleted, 2);
@@ -510,8 +569,18 @@ mod tests {
     #[test]
     fn export_jsonl_format() {
         let conn = open_in_memory().unwrap();
-        insert_run(&conn, &make_run("r1", 1000, "a", Some(200)), &make_payload("r1")).unwrap();
-        insert_run(&conn, &make_run("r2", 2000, "b", Some(404)), &make_payload("r2")).unwrap();
+        insert_run(
+            &conn,
+            &make_run("r1", 1000, "a", Some(200)),
+            &make_payload("r1"),
+        )
+        .unwrap();
+        insert_run(
+            &conn,
+            &make_run("r2", 2000, "b", Some(404)),
+            &make_payload("r2"),
+        )
+        .unwrap();
 
         let mut buf = Vec::new();
         let count = export_jsonl(&conn, &mut buf).unwrap();

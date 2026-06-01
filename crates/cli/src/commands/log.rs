@@ -15,7 +15,12 @@ pub fn handle(action: LogAction, json: bool, no_color: bool) -> anyhow::Result<(
         LogAction::Prune { keep } => handle_prune(&keep),
         LogAction::Export => handle_export(),
         LogAction::Clear => handle_clear(),
-        LogAction::Delete { id, since, status, req } => handle_delete(id, since, status, req),
+        LogAction::Delete {
+            id,
+            since,
+            status,
+            req,
+        } => handle_delete(id, since, status, req),
     }
 }
 
@@ -50,8 +55,7 @@ fn handle_list(
 
     let since_ts = match since {
         Some(ref s) => {
-            let duration_ms = db::parse_duration_str(s)
-                .map_err(|e| anyhow::anyhow!("{e}"))?;
+            let duration_ms = db::parse_duration_str(s).map_err(|e| anyhow::anyhow!("{e}"))?;
             let now = now_epoch_ms();
             Some(now.saturating_sub(duration_ms))
         }
@@ -130,8 +134,7 @@ fn handle_show(id: &str, json: bool, _no_color: bool) -> anyhow::Result<()> {
 
 fn handle_prune(keep: &str) -> anyhow::Result<()> {
     let conn = open_log_db()?;
-    let duration_ms = db::parse_duration_str(keep)
-        .map_err(|e| anyhow::anyhow!("{e}"))?;
+    let duration_ms = db::parse_duration_str(keep).map_err(|e| anyhow::anyhow!("{e}"))?;
     let cutoff = now_epoch_ms().saturating_sub(duration_ms);
     let deleted = db::prune(&conn, cutoff)?;
     eprintln!("pruned {deleted} log entries older than {keep}");
@@ -180,8 +183,7 @@ fn handle_delete(
 
     let since_ts = match since {
         Some(ref s) => {
-            let duration_ms = db::parse_duration_str(s)
-                .map_err(|e| anyhow::anyhow!("{e}"))?;
+            let duration_ms = db::parse_duration_str(s).map_err(|e| anyhow::anyhow!("{e}"))?;
             let now = now_epoch_ms();
             Some(now.saturating_sub(duration_ms))
         }
@@ -256,4 +258,3 @@ fn truncate_str(s: &str, max: usize) -> String {
         format!("{}...", &s[..max - 3])
     }
 }
-

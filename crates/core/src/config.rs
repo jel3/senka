@@ -106,11 +106,7 @@ fn default_retention_days() -> u32 {
 }
 
 fn default_redacted_headers() -> Vec<String> {
-    vec![
-        "authorization".into(),
-        "cookie".into(),
-        "set-cookie".into(),
-    ]
+    vec!["authorization".into(), "cookie".into(), "set-cookie".into()]
 }
 
 fn default_redacted_query_params() -> Vec<String> {

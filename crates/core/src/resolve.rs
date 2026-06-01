@@ -217,7 +217,10 @@ mod tests {
     fn parse_var_overrides_valid() {
         let raw = vec!["key=value".into(), "a=b=c".into()];
         let parsed = parse_var_overrides(&raw).unwrap();
-        assert_eq!(parsed, vec![("key".into(), "value".into()), ("a".into(), "b=c".into())]);
+        assert_eq!(
+            parsed,
+            vec![("key".into(), "value".into()), ("a".into(), "b=c".into())]
+        );
     }
 
     #[test]
@@ -290,7 +293,9 @@ mod tests {
             headers: HashMap::new(),
             query: HashMap::new(),
             auth: None,
-            body: Some(Body::Json(serde_json::json!({"user": "{{name}}", "nested": {"key": "{{secret}}"}}))),
+            body: Some(Body::Json(
+                serde_json::json!({"user": "{{name}}", "nested": {"key": "{{secret}}"}}),
+            )),
         };
         let vars = collect_template_vars(&req);
         assert_eq!(vars, vec!["name", "secret"]);

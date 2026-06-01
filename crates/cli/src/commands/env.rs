@@ -52,9 +52,9 @@ pub fn set_secret(key: &str, env: Option<&str>) -> anyhow::Result<()> {
         .context("not inside a Senka project (no senka.yml found)")?;
     let config = loader::load_config(&root).context("failed to load senka.yml")?;
 
-    let env_name = env
-        .or(config.defaults.env.as_deref())
-        .ok_or_else(|| anyhow::anyhow!("no environment specified and no default set in senka.yml"))?;
+    let env_name = env.or(config.defaults.env.as_deref()).ok_or_else(|| {
+        anyhow::anyhow!("no environment specified and no default set in senka.yml")
+    })?;
 
     // Verify env file exists
     let envs = loader::list_envs(&root).context("failed to list environments")?;
@@ -83,9 +83,9 @@ pub fn set(pair: &str, env: Option<&str>) -> anyhow::Result<()> {
     let config = loader::load_config(&root).context("failed to load senka.yml")?;
 
     // Determine environment name from flag or config default
-    let env_name = env
-        .or(config.defaults.env.as_deref())
-        .ok_or_else(|| anyhow::anyhow!("no environment specified and no default set in senka.yml"))?;
+    let env_name = env.or(config.defaults.env.as_deref()).ok_or_else(|| {
+        anyhow::anyhow!("no environment specified and no default set in senka.yml")
+    })?;
 
     // Parse KEY=VALUE
     let (key, value) = pair
@@ -111,8 +111,7 @@ pub fn set(pair: &str, env: Option<&str>) -> anyhow::Result<()> {
     environment.vars.insert(key.to_string(), value.to_string());
 
     // Write back
-    let yaml = serde_yaml::to_string(&environment)
-        .context("failed to serialize environment")?;
+    let yaml = serde_yaml::to_string(&environment).context("failed to serialize environment")?;
     fs::write(&env_path, yaml)
         .with_context(|| format!("failed to write {}", env_path.display()))?;
 

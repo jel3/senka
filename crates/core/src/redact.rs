@@ -20,7 +20,11 @@ pub fn redact_header_value(name: &str, value: &str, config: &RedactionConfig) ->
 /// Redact values in a query string for matching parameter names.
 pub fn redact_query_param(key: &str, value: &str, config: &RedactionConfig) -> String {
     let lower = key.to_lowercase();
-    if config.query_params.iter().any(|q| q.to_lowercase() == lower) {
+    if config
+        .query_params
+        .iter()
+        .any(|q| q.to_lowercase() == lower)
+    {
         REDACTED.to_string()
     } else {
         value.to_string()

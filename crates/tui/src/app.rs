@@ -228,7 +228,9 @@ impl App {
                         self.should_quit = true;
                         return true;
                     }
-                    _ => { return false; }
+                    _ => {
+                        return false;
+                    }
                 }
             }
 
@@ -356,9 +358,7 @@ impl App {
                 }
             }
             Tab::Logs => {
-                if !self.log_entries.is_empty()
-                    && self.log_list_idx < self.log_entries.len() - 1
-                {
+                if !self.log_entries.is_empty() && self.log_list_idx < self.log_entries.len() - 1 {
                     self.log_list_idx += 1;
                     self.detail_scroll = 0;
                     self.detail_focused = false;
@@ -497,7 +497,9 @@ impl App {
                     }
                 } else if mouse.row >= iy + ih {
                     self.detail_scroll = self.detail_scroll.saturating_add(1);
-                    if let Some(pos) = self.mouse_to_position(clamped_col, iy + ih.saturating_sub(1)) {
+                    if let Some(pos) =
+                        self.mouse_to_position(clamped_col, iy + ih.saturating_sub(1))
+                    {
                         let line_count = self.detail_line_count.get();
                         self.select_cursor = (pos.0.min(line_count.saturating_sub(1)), pos.1);
                     }
@@ -607,7 +609,11 @@ impl App {
             let sc = start_col.min(first.len());
             parts.push(&first[sc..]);
             // Middle lines: full
-            for line in lines.iter().take(end_line.min(lines.len())).skip(start_line + 1) {
+            for line in lines
+                .iter()
+                .take(end_line.min(lines.len()))
+                .skip(start_line + 1)
+            {
                 parts.push(line.as_str());
             }
             // Last line: from start to end_col
@@ -963,7 +969,9 @@ impl App {
                     // Format body
                     let body_str = String::from_utf8_lossy(&resp.body);
                     let body_str = redact::redact_secret_values(&body_str, &secret_values);
-                    let body_text = if let Ok(json_val) = serde_json::from_str::<serde_json::Value>(&body_str) {
+                    let body_text = if let Ok(json_val) =
+                        serde_json::from_str::<serde_json::Value>(&body_str)
+                    {
                         let mut val = json_val;
                         redact::redact_json_fields(&mut val, &config.redaction);
                         serde_json::to_string_pretty(&val).unwrap_or(body_str)
@@ -1275,11 +1283,7 @@ fn redact_headers_for_storage(
         .collect()
 }
 
-fn redact_body_for_storage(
-    body: &str,
-    config: &ProjectConfig,
-    secret_values: &[String],
-) -> String {
+fn redact_body_for_storage(body: &str, config: &ProjectConfig, secret_values: &[String]) -> String {
     let mut result = redact::redact_secret_values(body, secret_values);
     if !config.redaction.json_fields.is_empty() {
         if let Ok(mut json_val) = serde_json::from_str::<serde_json::Value>(&result) {

@@ -1,9 +1,9 @@
+pub mod complete;
 mod env;
 mod init;
 mod log;
 mod req;
 mod run;
-pub mod complete;
 
 use clap::Subcommand;
 use clap_complete::engine::ArgValueCompleter;

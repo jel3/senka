@@ -378,7 +378,12 @@ impl RequestForm {
                         value: TextInput::new(&m[k]),
                     })
                     .collect();
-                (BodyType::Form, TextInput::default(), TextInput::default(), pairs)
+                (
+                    BodyType::Form,
+                    TextInput::default(),
+                    TextInput::default(),
+                    pairs,
+                )
             }
         };
 
@@ -582,12 +587,7 @@ impl RequestForm {
     pub fn focused_is_action(&self) -> bool {
         matches!(
             self.rows.get(self.focused_row),
-            Some(
-                FormRow::AddHeader
-                    | FormRow::AddQuery
-                    | FormRow::AddBodyFormPair
-                    | FormRow::Save
-            )
+            Some(FormRow::AddHeader | FormRow::AddQuery | FormRow::AddBodyFormPair | FormRow::Save)
         )
     }
 

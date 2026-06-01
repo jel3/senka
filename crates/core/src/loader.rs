@@ -112,16 +112,16 @@ mod tests {
     use std::fs;
 
     fn setup_project(dir: &Path) {
-        fs::write(
-            dir.join("senka.yml"),
-            "name: test-project\n",
-        )
-        .unwrap();
+        fs::write(dir.join("senka.yml"), "name: test-project\n").unwrap();
 
         let env_dir = dir.join("senka-env");
         fs::create_dir_all(&env_dir).unwrap();
         fs::write(env_dir.join("dev.yml"), "base_url: http://localhost:3000\n").unwrap();
-        fs::write(env_dir.join("staging.yml"), "base_url: http://staging.example.com\n").unwrap();
+        fs::write(
+            env_dir.join("staging.yml"),
+            "base_url: http://staging.example.com\n",
+        )
+        .unwrap();
 
         let req_dir = dir.join("senka-requests");
         fs::create_dir_all(&req_dir).unwrap();

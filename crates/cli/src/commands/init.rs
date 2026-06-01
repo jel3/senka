@@ -45,7 +45,8 @@ pub fn run() -> anyhow::Result<()> {
 
     // Create directories
     fs::create_dir_all(cwd.join("senka-env")).context("failed to create senka-env/ directory")?;
-    fs::create_dir_all(cwd.join("senka-requests")).context("failed to create senka-requests/ directory")?;
+    fs::create_dir_all(cwd.join("senka-requests"))
+        .context("failed to create senka-requests/ directory")?;
     fs::create_dir_all(cwd.join(".senka")).context("failed to create .senka/ directory")?;
 
     // Write files
@@ -69,8 +70,7 @@ pub fn run() -> anyhow::Result<()> {
 
 fn write_if_missing(path: &Path, content: &str) -> anyhow::Result<()> {
     if !path.exists() {
-        fs::write(path, content)
-            .with_context(|| format!("failed to write {}", path.display()))?;
+        fs::write(path, content).with_context(|| format!("failed to write {}", path.display()))?;
     }
     Ok(())
 }

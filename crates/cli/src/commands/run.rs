@@ -12,8 +12,8 @@ use senka_runner::response::CapturedResponse;
 use senka_store::db;
 use senka_store::models::{Payload, Run};
 
-use senka_core::util::now_epoch_ms;
 use crate::output::{self, OutputOptions};
+use senka_core::util::now_epoch_ms;
 
 pub struct RunArgs {
     pub request: String,
@@ -36,10 +36,7 @@ pub async fn run(args: RunArgs) -> anyhow::Result<()> {
     let config = loader::load_config(&root).context("failed to load tool.yml")?;
 
     // Determine env name
-    let env_name = args
-        .env
-        .as_deref()
-        .or(config.defaults.env.as_deref());
+    let env_name = args.env.as_deref().or(config.defaults.env.as_deref());
 
     // Load env file (if specified)
     let env = match env_name {
@@ -51,8 +48,7 @@ pub async fn run(args: RunArgs) -> anyhow::Result<()> {
     };
 
     // Parse CLI var overrides
-    let overrides = resolve::parse_var_overrides(&args.vars)
-        .map_err(|e| anyhow::anyhow!("{e}"))?;
+    let overrides = resolve::parse_var_overrides(&args.vars).map_err(|e| anyhow::anyhow!("{e}"))?;
 
     // Merge variables
     let mut vars = resolve::merge_vars(env.as_ref(), &overrides);
@@ -92,8 +88,8 @@ pub async fn run(args: RunArgs) -> anyhow::Result<()> {
         timeout_ms: None,
         max_redirects: None,
     };
-    let client = execute::build_client(&config, &client_opts)
-        .context("failed to build HTTP client")?;
+    let client =
+        execute::build_client(&config, &client_opts).context("failed to build HTTP client")?;
 
     let exec_result = execute::execute(&client, &req, config.logging.max_body_kb).await;
 

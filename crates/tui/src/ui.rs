@@ -74,7 +74,7 @@ pub fn draw(f: &mut Frame, app: &App) {
         .direction(Direction::Vertical)
         .constraints([
             Constraint::Length(1), // title bar
-            Constraint::Min(0),   // content
+            Constraint::Min(0),    // content
             Constraint::Length(1), // status bar
         ])
         .split(f.area());
@@ -95,10 +95,7 @@ pub fn draw(f: &mut Frame, app: &App) {
 }
 
 fn draw_title_bar(f: &mut Frame, app: &App, area: Rect) {
-    let env_label = app
-        .active_env
-        .as_deref()
-        .unwrap_or("none");
+    let env_label = app.active_env.as_deref().unwrap_or("none");
 
     let req_style = if app.current_tab == Tab::Requests {
         active_tab_style()
@@ -277,7 +274,8 @@ fn draw_response_view(f: &mut Frame, app: &crate::app::App, area: Rect) {
     let inner = block.inner(area);
     app.detail_line_count.set(lines.len());
     app.detail_viewport_height.set(inner.height as usize);
-    app.detail_inner_rect.set((inner.x, inner.y, inner.width, inner.height));
+    app.detail_inner_rect
+        .set((inner.x, inner.y, inner.width, inner.height));
     store_row_offsets(app, &lines, inner.width);
 
     // Apply selection highlighting
@@ -307,10 +305,7 @@ fn draw_logs_tab(f: &mut Frame, app: &App, area: Rect) {
                 Some(s) => format!("{s}"),
                 None => "ERR".to_string(),
             };
-            let text = format!(
-                "{} {} {} ms",
-                status_str, run.request_name, run.duration_ms
-            );
+            let text = format!("{} {} {} ms", status_str, run.request_name, run.duration_ms);
             ListItem::new(text).style(status_style(run.status))
         })
         .collect();
@@ -406,7 +401,8 @@ fn draw_log_detail(f: &mut Frame, app: &crate::app::App, area: Rect) {
     let inner = block.inner(area);
     app.detail_line_count.set(lines.len());
     app.detail_viewport_height.set(inner.height as usize);
-    app.detail_inner_rect.set((inner.x, inner.y, inner.width, inner.height));
+    app.detail_inner_rect
+        .set((inner.x, inner.y, inner.width, inner.height));
     store_row_offsets(app, &lines, inner.width);
 
     // Apply selection highlighting
@@ -474,10 +470,7 @@ fn render_form_row<'a>(form: &RequestForm, row: &FormRow, focused: bool) -> Line
         }
         FormRow::Method => {
             let val = form.method.as_str();
-            Line::from(Span::styled(
-                format!("{prefix}Method:   < {val} >"),
-                style,
-            ))
+            Line::from(Span::styled(format!("{prefix}Method:   < {val} >"), style))
         }
         FormRow::Url => {
             let val = display_text_field(&form.url, focused && form.editing);
@@ -494,9 +487,7 @@ fn render_form_row<'a>(form: &RequestForm, row: &FormRow, focused: bool) -> Line
             let val = display_text_field(&form.headers[*i].value, focused && form.editing);
             Line::from(Span::styled(format!("{prefix}  Value:  {val}"), style))
         }
-        FormRow::AddHeader => {
-            Line::from(Span::styled(format!("{prefix}  [+ Add Header]"), style))
-        }
+        FormRow::AddHeader => Line::from(Span::styled(format!("{prefix}  [+ Add Header]"), style)),
         FormRow::QueryKey(i) => {
             let val = display_text_field(&form.query[*i].key, focused && form.editing);
             Line::from(Span::styled(format!("{prefix}  Key:    {val}"), style))
@@ -505,15 +496,10 @@ fn render_form_row<'a>(form: &RequestForm, row: &FormRow, focused: bool) -> Line
             let val = display_text_field(&form.query[*i].value, focused && form.editing);
             Line::from(Span::styled(format!("{prefix}  Value:  {val}"), style))
         }
-        FormRow::AddQuery => {
-            Line::from(Span::styled(format!("{prefix}  [+ Add Param]"), style))
-        }
+        FormRow::AddQuery => Line::from(Span::styled(format!("{prefix}  [+ Add Param]"), style)),
         FormRow::AuthType => {
             let val = form.auth_type.label();
-            Line::from(Span::styled(
-                format!("{prefix}Auth:     < {val} >"),
-                style,
-            ))
+            Line::from(Span::styled(format!("{prefix}Auth:     < {val} >"), style))
         }
         FormRow::AuthBearerToken => {
             let val = display_text_field(&form.auth_bearer_token, focused && form.editing);
@@ -529,10 +515,7 @@ fn render_form_row<'a>(form: &RequestForm, row: &FormRow, focused: bool) -> Line
         }
         FormRow::BodyType => {
             let val = form.body_type.label();
-            Line::from(Span::styled(
-                format!("{prefix}Body:     < {val} >"),
-                style,
-            ))
+            Line::from(Span::styled(format!("{prefix}Body:     < {val} >"), style))
         }
         FormRow::BodyRawContent => {
             let val = display_text_field(&form.body_raw, focused && form.editing);
@@ -554,10 +537,7 @@ fn render_form_row<'a>(form: &RequestForm, row: &FormRow, focused: bool) -> Line
             Line::from(Span::styled(format!("{prefix}  [+ Add Field]"), style))
         }
         FormRow::Spacer => Line::from(""),
-        FormRow::Save => Line::from(Span::styled(
-            format!("{prefix}[Save Request]"),
-            style,
-        )),
+        FormRow::Save => Line::from(Span::styled(format!("{prefix}[Save Request]"), style)),
     }
 }
 
@@ -593,8 +573,7 @@ fn draw_welcome(f: &mut Frame, area: Rect) {
     lines.push(Line::from("  Tab: switch tab      e: select env"));
     lines.push(Line::from("  q: quit"));
 
-    let text = Paragraph::new(lines)
-        .block(Block::default().borders(Borders::ALL));
+    let text = Paragraph::new(lines).block(Block::default().borders(Borders::ALL));
     f.render_widget(text, area);
 }
 
@@ -796,10 +775,7 @@ fn highlight_line_range(line: &mut Line, from_col: usize, to_col: usize) {
             new_spans.push(span);
         } else if span_start >= from_col && span_end <= to_col {
             // Entirely inside selection
-            new_spans.push(Span::styled(
-                span.content.to_string(),
-                span.style.patch(hl),
-            ));
+            new_spans.push(Span::styled(span.content.to_string(), span.style.patch(hl)));
         } else {
             // Partially overlapping — split the span
             let content = span.content.to_string();
@@ -807,20 +783,14 @@ fn highlight_line_range(line: &mut Line, from_col: usize, to_col: usize) {
             let rel_to = to_col.saturating_sub(span_start).min(span_len);
 
             if rel_from > 0 {
-                new_spans.push(Span::styled(
-                    content[..rel_from].to_string(),
-                    span.style,
-                ));
+                new_spans.push(Span::styled(content[..rel_from].to_string(), span.style));
             }
             new_spans.push(Span::styled(
                 content[rel_from..rel_to].to_string(),
                 span.style.patch(hl),
             ));
             if rel_to < span_len {
-                new_spans.push(Span::styled(
-                    content[rel_to..].to_string(),
-                    span.style,
-                ));
+                new_spans.push(Span::styled(content[rel_to..].to_string(), span.style));
             }
         }
     }
