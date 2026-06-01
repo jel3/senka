@@ -20,6 +20,13 @@ keywords = ["http", "cli", "rest", "api", "tui"]
 categories = ["command-line-utilities", "web-programming::http-client"]
 
 [workspace.dependencies]
+# Internal crates
+senka-core = { version = "0.1.0", path = "crates/core" }
+senka-runner = { version = "0.1.0", path = "crates/runner" }
+senka-store = { version = "0.1.0", path = "crates/store" }
+senka-secrets = { version = "0.1.0", path = "crates/secrets" }
+senka-tui = { version = "0.1.0", path = "crates/tui" }
+
 # Serialization
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
@@ -58,10 +65,3 @@ rand = "0.8"
 # Error handling
 thiserror = "2"
 anyhow = "1"
-
-# Internal crates
-senka-core = { path = "crates/core" }
-senka-runner = { path = "crates/runner" }
-senka-store = { path = "crates/store" }
-senka-secrets = { path = "crates/secrets" }
-senka-tui = { path = "crates/tui" }
