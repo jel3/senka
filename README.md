@@ -1,20 +1,24 @@
 # senka
 
 [![CI](https://github.com/jel3/senka/actions/workflows/ci.yml/badge.svg)](https://github.com/jel3/senka/actions/workflows/ci.yml)
+[![crates.io](https://img.shields.io/crates/v/senka.svg)](https://crates.io/crates/senka)
 
 A CLI-first HTTP execution and inspection tool. Define requests as YAML files, run them with environment variables and secrets, and browse results in a terminal UI. Local-first — no telemetry, no cloud dependency.
 
 ## Installation
 
 ```bash
-cargo build --release
-# Binary at: target/release/senka
+cargo install senka
+
+# With the interactive TUI
+cargo install senka --features tui
 ```
 
-To build with the interactive TUI:
+Or build from source:
 
 ```bash
-cargo build --release --features tui
+cargo build --release
+# Binary at: target/release/senka
 ```
 
 ## Quick Start
