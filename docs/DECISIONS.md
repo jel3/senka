@@ -129,13 +129,12 @@ senka/
 
 ```bash
 project/
-  tool.yml
-  env/
+  senka.yml
+  senka-env/
     dev.yml
     stage.yml
-  requests/
+  senka-requests/
     users.get.yml
-  data/
   .senka/
     logs.db
 ```
@@ -181,7 +180,7 @@ No logic / loops / conditionals in v1.
 
 Plaintext environment files (non-sensitive):
 
-- `env/dev.yml`, `env/stage.yml`, etc.
+- `senka-env/dev.yml`, `senka-env/stage.yml`, etc.
 
 Secrets:
 
