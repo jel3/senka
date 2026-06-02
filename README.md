@@ -15,6 +15,7 @@ A CLI-first HTTP execution and inspection tool. Define requests as YAML files, r
 - [Project Structure](#project-structure)
 - [senka.yml](#senkayml)
 - [Request Files](#request-files)
+- [Generate Request Files from an Existing API](#generate-request-files-from-an-existing-api)
 - [Environment Files](#environment-files)
 - [Commands](#commands)
 - [Secrets](#secrets)
@@ -165,6 +166,10 @@ auth:
   username: "{{user}}"
   password: "{{pass}}"
 ```
+
+### Generate Request Files from an Existing API
+
+[`GENERATE_REQUESTS_PROMPT.md`](GENERATE_REQUESTS_PROMPT.md) contains a prompt you can drop into any AI assistant. Point it at a codebase and it will generate a full set of `senka-requests/` YAML files, a `senka.yml`, and a `senka-env/dev.yml` automatically.
 
 ## Environment Files
 
