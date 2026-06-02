@@ -10,7 +10,7 @@ members = [
 resolver = "2"
 
 [workspace.package]
-version = "0.1.1"
+version = "0.1.2"
 edition = "2021"
 license = "MIT OR Apache-2.0"
 description = "CLI-first HTTP execution and inspection engine with environment/secret management and SQLite logging"
@@ -21,11 +21,11 @@ categories = ["command-line-utilities", "web-programming::http-client"]
 
 [workspace.dependencies]
 # Internal crates
-senka-core = { version = "0.1.1", path = "crates/core" }
-senka-runner = { version = "0.1.1", path = "crates/runner" }
-senka-store = { version = "0.1.1", path = "crates/store" }
-senka-secrets = { version = "0.1.1", path = "crates/secrets" }
-senka-tui = { version = "0.1.1", path = "crates/tui" }
+senka-core = { version = "0.1.2", path = "crates/core" }
+senka-runner = { version = "0.1.2", path = "crates/runner" }
+senka-store = { version = "0.1.2", path = "crates/store" }
+senka-secrets = { version = "0.1.2", path = "crates/secrets" }
+senka-tui = { version = "0.1.2", path = "crates/tui" }
 
 # Serialization
 serde = { version = "1", features = ["derive"] }
