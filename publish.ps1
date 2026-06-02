@@ -1,3 +1,4 @@
+# script to help with publishing all crates in the correct order, with a delay between each publish to avoid hitting rate limits
 $crates = @(
     "senka-core",
     "senka-secrets",

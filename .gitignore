@@ -6,6 +6,7 @@
 .vscode/
 .claude/
 CLAUDE.md
+instructions.md
 *.swp
 *.swo
 
@@ -19,3 +20,4 @@ Thumbs.db
 .senka/
 senka-*/
 senka.yml
+publish.ps1
