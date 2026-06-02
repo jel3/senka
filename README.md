@@ -5,6 +5,41 @@
 
 A CLI-first HTTP execution and inspection tool. Define requests as YAML files, run them with environment variables and secrets, and browse results in a terminal UI. Local-first — no telemetry, no cloud dependency.
 
+---
+
+## Table of Contents
+
+- [Preview](#preview)
+- [Installation](#installation)
+- [Quick Start](#quick-start)
+- [Project Structure](#project-structure)
+- [senka.yml](#senkayml)
+- [Request Files](#request-files)
+- [Environment Files](#environment-files)
+- [Commands](#commands)
+- [Secrets](#secrets)
+- [Shell Completions](#shell-completions)
+- [Exit Codes](#exit-codes)
+
+---
+
+## Preview
+
+<p align="center">
+  <img src="docs/preview-cli.png" alt="CLI output" width="700" /><br>
+  <em>CLI — commands</em>
+</p>
+
+<p align="center">
+  <img src="docs/preview-tui.png" alt="TUI" width="700" /><br>
+  <em>TUI — interactive request explorer</em>
+</p>
+
+<p align="center">
+  <img src="docs/preview-config.png" alt="Request config" width="700" /><br>
+  <em>Request file — YAML definition</em>
+</p>
+
 ## Installation
 
 ```bash
